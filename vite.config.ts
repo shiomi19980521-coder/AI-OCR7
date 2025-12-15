@@ -1,6 +1,5 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
-// @ts-ignore
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
