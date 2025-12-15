@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { TimeEntry } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 // Update Schema to return an object containing both the name and the entries array
 const timeCardSchema: Schema = {
@@ -59,8 +59,8 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entries: TimeEntry[], name: string }> => {
   try {
     const cleanBase64 = base64Image.split(',')[1] || base64Image;
-    const modelId = "gemini-2.5-flash"; 
-    
+    const modelId = "gemini-2.5-flash";
+
     const response = await ai.models.generateContent({
       model: modelId,
       contents: {
@@ -135,23 +135,23 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       // Try to determine the weekday offset
       let firstValidDayEntry = data.find(d => d.dayOfWeek && WEEKDAYS.includes(d.dayOfWeek.replace(/[()]/g, '')));
       let weekdayOffset = -1;
-      
+
       if (firstValidDayEntry && firstValidDayEntry.dayInt) {
-         const cleanDow = firstValidDayEntry.dayOfWeek.replace(/[()]/g, '');
-         const dowIndex = WEEKDAYS.indexOf(cleanDow);
-         if (dowIndex !== -1) {
-            weekdayOffset = (dowIndex - (firstValidDayEntry.dayInt % 7) + 7) % 7;
-         }
+        const cleanDow = firstValidDayEntry.dayOfWeek.replace(/[()]/g, '');
+        const dowIndex = WEEKDAYS.indexOf(cleanDow);
+        if (dowIndex !== -1) {
+          weekdayOffset = (dowIndex - (firstValidDayEntry.dayInt % 7) + 7) % 7;
+        }
       }
 
       let currentDay = startDay;
 
       while (currentDay <= lastDay) {
         let entry = data.find(d => d.dayInt === currentDay);
-        
+
         let calculatedDow = '';
         if (weekdayOffset !== -1) {
-           calculatedDow = WEEKDAYS[(currentDay + weekdayOffset) % 7];
+          calculatedDow = WEEKDAYS[(currentDay + weekdayOffset) % 7];
         }
 
         if (!entry) {
@@ -166,13 +166,13 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
             endTime2: '',
           };
         } else if (!entry.dayOfWeek && calculatedDow) {
-           entry.dayOfWeek = calculatedDow;
+          entry.dayOfWeek = calculatedDow;
         }
 
         // Format the date string to be "20土" style
-        const displayDate = entry.date.replace(/[^0-9]/g, ''); 
+        const displayDate = entry.date.replace(/[^0-9]/g, '');
         const displayDow = (entry.dayOfWeek || '').replace(/[()]/g, '');
-        
+
         entry.date = displayDow ? `${displayDate}${displayDow}` : `${displayDate}`;
 
         filledData.push(entry);
