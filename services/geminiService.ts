@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { TimeEntry } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+// GoogleGenAI initialized lazily
 
 // Update Schema to return an object containing both the name and the entries array
 const timeCardSchema: Schema = {
@@ -60,6 +60,13 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
   try {
     const cleanBase64 = base64Image.split(',')[1] || base64Image;
     const modelId = "gemini-2.5-flash";
+
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Gemini API Key is not set. Please check your environment variables.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
 
     const response = await ai.models.generateContent({
       model: modelId,
