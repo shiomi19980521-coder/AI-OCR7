@@ -105,11 +105,11 @@ export const PaymentSuccess: React.FC = () => {
                 )}
             </div>
             <style>{`
-                @keyframes progress {
-                    from { width: 0%; }
-                    to { width: 100%; }
-                }
-            `}</style>
+                        @keyframes progress {
+                            from { width: 0%; }
+                            to { width: 100%; }
+                        }
+                    `}</style>
         </div>
     );
 };
