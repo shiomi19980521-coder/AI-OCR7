@@ -75,10 +75,16 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     // Use 2.0 Flash Experimental (User requested 2.5, likely meaning 2.0)
     const modelId = "gemini-2.0-flash-exp";
 
+    // DEBUG: Log environment status
+    console.log("[DEBUG] Checking Environment Variables...");
+    console.log("Current Mode:", import.meta.env.MODE);
+    console.log("Available VITE_ Keys:", Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
+    console.log("Has VITE_GEMINI_API_KEY:", !!import.meta.env.VITE_GEMINI_API_KEY);
+
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("API Key missing in environment variables");
-      throw new Error("API Key is missing. Please check Vercel settings.");
+      console.error("[FATAL] API Key is verified missing. Environment dump:", import.meta.env);
+      throw new Error("API Key is missing (Value is undefined). Please check browser console for details.");
     }
     console.log("Gemini Service: API Key found (length: " + apiKey.length + ")");
 
