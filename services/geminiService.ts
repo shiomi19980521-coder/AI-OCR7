@@ -1,48 +1,49 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import { TimeEntry } from "../types";
 
-// GoogleGenAI initialized lazily
+// GoogleGenerativeAI initialized lazily
 
 // Update Schema to return an object containing both the name and the entries array
 const timeCardSchema: Schema = {
-  type: Type.OBJECT,
+  description: "Timecard data",
+  type: SchemaType.OBJECT,
   properties: {
     name: {
-      type: Type.STRING,
+      type: SchemaType.STRING,
       description: "The name of the employee (氏名) found on the timecard. If not found, return null.",
     },
     entries: {
-      type: Type.ARRAY,
+      type: SchemaType.ARRAY,
       description: "List of attendance entries extracted from the timecard.",
       items: {
-        type: Type.OBJECT,
+        type: SchemaType.OBJECT,
         properties: {
           dayInt: {
-            type: Type.INTEGER,
+            type: SchemaType.INTEGER,
             description: "The numeric day of the month (e.g., 1, 15, 31). Used for sorting.",
           },
           date: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: "The extracted date string (e.g. '1', '20'). Do not include the month.",
           },
           dayOfWeek: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: "The day of the week in Japanese shorthand (e.g., '月', '火', '土', '日').",
           },
           startTime1: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: "First period clock-in time in HH:mm format (24-hour).",
           },
           endTime1: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: "First period clock-out time in HH:mm format (24-hour).",
           },
           startTime2: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: "Second period clock-in time in HH:mm format (24-hour). If empty, return empty string.",
           },
           endTime2: {
-            type: Type.STRING,
+            type: SchemaType.STRING,
             description: "Second period clock-out time in HH:mm format (24-hour). If empty, return empty string.",
           },
         },
@@ -69,55 +70,51 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     }
     console.log("Gemini Service: API Key found (length: " + apiKey.length + ")");
 
-    const ai = new GoogleGenAI({ apiKey });
-
-    const response = await ai.models.generateContent({
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
       model: modelId,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: cleanBase64,
-            },
-          },
-          {
-            text: `
-              この勤務表（タイムカード）の画像を解析し、データを抽出してください。
-              
-              以下の情報を抽出してください：
-              1. 氏名（Name）: カード上部に記載されている氏名を探してください。見つからない場合はnullにしてください。
-              
-              2. 勤怠データ（Entries）:
-                 - 日付 (数字のみ抽出)
-                 - 曜日 (日本語の曜日一文字)
-                 - 開始時間1
-                 - 終了時間1
-                 - 開始時間2
-                 - 終了時間2
-              
-              日付の行は、画像に表示されている通りに抽出してください。
-              開始・終了時間が空欄でも、日付が印字されている場合は抽出してください。
-              時間が空欄の場合は、nullではなく空文字("")を出力してください。
-            `,
-          },
-        ],
-      },
-      config: {
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: timeCardSchema,
         temperature: 0.1,
-      },
+      }
     });
 
-    const text = response.text;
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: cleanBase64
+        }
+      },
+      `
+        この勤務表（タイムカード）の画像を解析し、データを抽出してください。
+        
+        以下の情報を抽出してください：
+        1. 氏名（Name）: カード上部に記載されている氏名を探してください。見つからない場合はnullにしてください。
+        
+        2. 勤怠データ（Entries）:
+            - 日付 (数字のみ抽出)
+            - 曜日 (日本語の曜日一文字)
+            - 開始時間1
+            - 終了時間1
+            - 開始時間2
+            - 終了時間2
+        
+        日付の行は、画像に表示されている通りに抽出してください。
+        開始・終了時間が空欄でも、日付が印字されている場合は抽出してください。
+        時間が空欄の場合は、nullではなく空文字("")を出力してください。
+      `
+    ]);
+
+    const text = result.response.text();
     if (!text) {
       throw new Error("No data returned from Gemini.");
     }
 
-    const result = JSON.parse(text) as { name?: string | null, entries: TimeEntry[] };
-    let data = result.entries || [];
-    const detectedName = result.name || "";
+    const parsedResult = JSON.parse(text) as { name?: string | null, entries: TimeEntry[] };
+    let data = parsedResult.entries || [];
+    const detectedName = parsedResult.name || "";
 
     // Helper to clean 'null' strings or null values
     const cleanStr = (val: any) => {
