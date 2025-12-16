@@ -392,10 +392,10 @@ export const Home: React.FC = () => {
       }
 
       setStatus(ProcessingStatus.SUCCESS);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
       setStatus(ProcessingStatus.ERROR);
-      setErrorMsg("処理中にエラーが発生しました。");
+      setErrorMsg(`エラーが発生しました: ${error.message || "詳細不明"}`);
     }
   };
 

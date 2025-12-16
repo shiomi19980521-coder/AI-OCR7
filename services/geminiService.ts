@@ -59,12 +59,15 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entries: TimeEntry[], name: string }> => {
   try {
     const cleanBase64 = base64Image.split(',')[1] || base64Image;
-    const modelId = "gemini-1.5-flash";
+    // Use 2.0 Flash Experimental as requested (1.5 is standard, 2.5 doesn't exist)
+    const modelId = "gemini-2.0-flash-exp";
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("Gemini API Key is not set. Please check your environment variables.");
+      console.error("API Key missing in environment variables");
+      throw new Error("API Key is missing. Please check Vercel settings.");
     }
+    console.log("Gemini Service: API Key found (length: " + apiKey.length + ")");
 
     const ai = new GoogleGenAI({ apiKey });
 
