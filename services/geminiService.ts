@@ -59,7 +59,7 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entries: TimeEntry[], name: string }> => {
   try {
     const cleanBase64 = base64Image.split(',')[1] || base64Image;
-    const modelId = "gemini-2.5-flash";
+    const modelId = "gemini-1.5-flash";
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
