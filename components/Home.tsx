@@ -327,12 +327,15 @@ export const Home: React.FC = () => {
       let sheetErrorCount = 0;
       const newResults: ProcessingResult[] = [];
 
+      let lastError: any = null;
+
       for (let i = 0; i < files.length; i++) {
         const fileNumber = i + 1;
         const totalFiles = files.length;
         const currentFile = files[i];
 
         setProgressMsg(`${fileNumber} / ${totalFiles} 枚目を解析中...`);
+
         const base64 = await convertToBase64(currentFile);
 
         try {
@@ -365,6 +368,7 @@ export const Home: React.FC = () => {
 
         } catch (e) {
           console.error(`Failed to process file ${i + 1}`, e);
+          lastError = e;
           newResults.push({
             id: crypto.randomUUID(),
             fileName: currentFile.name,
@@ -376,7 +380,7 @@ export const Home: React.FC = () => {
       }
 
       if (successCount === 0) {
-        throw new Error("すべての画像の解析に失敗しました。");
+        throw new Error(lastError?.message || "すべての画像の解析に失敗しました。");
       }
 
       setProgressMsg(null);

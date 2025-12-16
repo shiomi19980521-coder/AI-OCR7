@@ -59,7 +59,19 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 // Update return type to include name
 export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entries: TimeEntry[], name: string }> => {
   try {
-    const cleanBase64 = base64Image.split(',')[1] || base64Image;
+    // Extract mime type if present, otherwise default to jpeg
+    let mimeType = "image/jpeg";
+    let cleanBase64 = base64Image;
+
+    if (base64Image.includes(',')) {
+      const parts = base64Image.split(',');
+      const match = parts[0].match(/:(.*?);/);
+      if (match) {
+        mimeType = match[1];
+      }
+      cleanBase64 = parts[1];
+    }
+
     // Use stable 1.5 Flash model
     const modelId = "gemini-1.5-flash";
 
@@ -83,7 +95,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     const result = await model.generateContent([
       {
         inlineData: {
-          mimeType: "image/jpeg",
+          mimeType: mimeType,
           data: cleanBase64
         }
       },
