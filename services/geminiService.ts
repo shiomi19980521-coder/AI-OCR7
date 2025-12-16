@@ -72,8 +72,8 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       cleanBase64 = parts[1];
     }
 
-    // Use stable 1.5 Flash model
-    const modelId = "gemini-1.5-flash";
+    // Use 2.0 Flash Experimental (User requested 2.5, likely meaning 2.0)
+    const modelId = "gemini-2.0-flash-exp";
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
