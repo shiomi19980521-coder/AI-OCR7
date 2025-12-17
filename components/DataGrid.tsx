@@ -29,7 +29,7 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
       const [sH, sM] = start.split(':').map(Number);
       const [eH, eM] = end.split(':').map(Number);
       if (isNaN(sH) || isNaN(eH)) return 0;
-      
+
       const startMin = sH * 60 + (sM || 0);
       const endMin = eH * 60 + (eM || 0);
       return Math.max(0, endMin - startMin);
@@ -47,9 +47,15 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
   };
 
   const getRowTotalMinutes = (row: TimeEntry): number => {
-     const period1 = calculateDurationMinutes(row.startTime1, row.endTime1);
-     const period2 = calculateDurationMinutes(row.startTime2, row.endTime2);
-     return period1 + period2;
+    // If API provided totalHours, use it (convert hours to minutes for display consistency)
+    if (row.totalHours !== undefined && row.totalHours !== null) {
+      return Math.round(row.totalHours * 60);
+    }
+
+    // Fallback to client-side calculation
+    const period1 = calculateDurationMinutes(row.startTime1, row.endTime1);
+    const period2 = calculateDurationMinutes(row.startTime2, row.endTime2);
+    return period1 + period2;
   };
 
   const calculateGrandTotal = (): string => {
@@ -68,11 +74,11 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
       // Columns: Date, Start1, End1, Start2, End2, Total
       return `${row.date}\t${row.startTime1}\t${row.endTime1}\t${row.startTime2}\t${row.endTime2}\t'${total}`;
     }).join("\n");
-    
+
     // Add Grand Total row
     const grandTotal = calculateGrandTotal();
     const totalRow = `総合計時間\t\t\t\t\t'${grandTotal}`;
-    
+
     navigator.clipboard.writeText(rows + "\n" + totalRow).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -92,7 +98,7 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="bg-green-100 p-2 rounded-lg">
-               <FileSpreadsheet className="w-5 h-5 text-green-700" />
+              <FileSpreadsheet className="w-5 h-5 text-green-700" />
             </div>
             <div>
               <h3 className="font-bold text-slate-800 text-lg">
@@ -113,8 +119,8 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
             onClick={copyToClipboard}
             className={`
               flex-1 sm:flex-none justify-center flex items-center px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 shadow-sm
-              ${copied 
-                ? 'bg-green-50 text-green-700 border border-green-200' 
+              ${copied
+                ? 'bg-green-50 text-green-700 border border-green-200'
                 : 'bg-slate-800 text-white hover:bg-slate-700 border border-transparent'
               }
             `}
@@ -124,7 +130,7 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
           </button>
         </div>
       </div>
-      
+
       {/* Table Container */}
       <div className="overflow-x-auto relative">
         <table className="w-full text-xs md:text-sm text-left border-collapse min-w-[600px]">
@@ -142,18 +148,18 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
             {data.map((row, index) => (
               <tr key={index} className="group bg-white hover:bg-slate-50 transition-colors">
                 <td className="px-1 py-1 md:px-2 border-r border-slate-100">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={row.date}
                     onChange={(e) => handleCellChange(index, 'date', e.target.value)}
                     className={`w-full bg-transparent border-none focus:ring-0 text-center p-0 text-xs md:text-sm ${getDateStyle(row.date)}`}
                   />
                 </td>
-                
+
                 {/* Set 1 */}
                 <td className="px-1 py-1 md:px-2 bg-indigo-50/10 group-hover:bg-indigo-50/30 border-r border-slate-100">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={row.startTime1}
                     placeholder=""
                     onChange={(e) => handleCellChange(index, 'startTime1', e.target.value)}
@@ -161,8 +167,8 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
                   />
                 </td>
                 <td className="px-1 py-1 md:px-2 bg-indigo-50/10 group-hover:bg-indigo-50/30 border-r border-indigo-100">
-                   <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={row.endTime1}
                     placeholder=""
                     onChange={(e) => handleCellChange(index, 'endTime1', e.target.value)}
@@ -172,8 +178,8 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
 
                 {/* Set 2 */}
                 <td className="px-1 py-1 md:px-2 bg-orange-50/10 group-hover:bg-orange-50/30 border-r border-slate-100">
-                   <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={row.startTime2}
                     placeholder=""
                     onChange={(e) => handleCellChange(index, 'startTime2', e.target.value)}
@@ -181,8 +187,8 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
                   />
                 </td>
                 <td className="px-1 py-1 md:px-2 bg-orange-50/10 group-hover:bg-orange-50/30 border-r border-slate-100">
-                   <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={row.endTime2}
                     placeholder=""
                     onChange={(e) => handleCellChange(index, 'endTime2', e.target.value)}
@@ -192,17 +198,17 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
 
                 {/* Calculations */}
                 <td className="px-1 py-1 md:px-4 md:py-2 text-center font-mono text-slate-800 font-medium bg-slate-50/50 border-r border-slate-100 text-xs md:text-sm">
-                   {formatTime(getRowTotalMinutes(row))}
+                  {formatTime(getRowTotalMinutes(row))}
                 </td>
               </tr>
             ))}
             {/* Grand Total Row */}
-             {data.length > 0 && (
+            {data.length > 0 && (
               <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
                 <td colSpan={5} className="px-4 py-3 text-right text-slate-600 uppercase tracking-wider text-xs hidden md:table-cell">
                   総合計時間
                 </td>
-                 <td colSpan={5} className="px-2 py-3 text-right text-slate-600 uppercase tracking-wider text-[10px] md:hidden">
+                <td colSpan={5} className="px-2 py-3 text-right text-slate-600 uppercase tracking-wider text-[10px] md:hidden">
                   合計
                 </td>
                 <td className="px-2 py-3 md:px-4 text-center font-mono text-indigo-700 text-sm md:text-base border-l border-slate-200 bg-indigo-50/50">
@@ -220,12 +226,12 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
           </tbody>
         </table>
       </div>
-      
+
       <div className="bg-slate-50 px-4 md:px-6 py-2 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
         <span className="font-medium">抽出行数: {data.length}</span>
         <div className="flex items-center gap-2">
-           <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
-           <span className="hidden md:inline">クリックして編集可能</span>
+          <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
+          <span className="hidden md:inline">クリックして編集可能</span>
         </div>
       </div>
     </div>
