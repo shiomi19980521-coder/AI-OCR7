@@ -6,6 +6,7 @@ export interface TimeEntry {
   endTime1: string;
   startTime2: string;
   endTime2: string;
+  totalHours?: number; // Daily total work hours (calculated)
 }
 
 export enum ProcessingStatus {

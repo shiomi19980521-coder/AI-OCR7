@@ -46,6 +46,10 @@ const timeCardSchema: Schema = {
             type: SchemaType.STRING,
             description: "Second period clock-out time in HH:mm format (24-hour). If empty, return empty string.",
           },
+          totalHours: {
+            type: SchemaType.NUMBER,
+            description: "Total work hours for this day. Calculate by summing (endTime1 - startTime1) + (endTime2 - startTime2) if applicable. Return 0 if no times available.",
+          },
         },
         required: ["dayInt", "date"],
       },
@@ -114,14 +118,21 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         2. 勤怠データ（Entries）:
             - 日付 (数字のみ抽出)
             - 曜日 (日本語の曜日一文字)
-            - 開始時間1
-            - 終了時間1
-            - 開始時間2
-            - 終了時間2
+            - 時刻データ（柔軟に対応）:
+              * 横1列に2回分の時刻がある場合: 出勤時間1、退勤時間1として記録
+              * 横1列に4回分の時刻がある場合: 出勤時間1、退勤時間1、出勤時間2、退勤時間2として記録
+              * タイムカードの形式に応じて柔軟に対応してください
+            - 合計時間（totalHours）:
+              * 1日の総労働時間を計算してください
+              * 計算式: (退勤時間1 - 出勤時間1) + (退勤時間2 - 出勤時間2)
+              * 時間は小数点形式（例: 8.5時間）で出力してください
+              * 時刻データがない場合は 0 を出力してください
         
-        日付の行は、画像に表示されている通りに抽出してください。
-        開始・終了時間が空欄でも、日付が印字されている場合は抽出してください。
-        時間が空欄の場合は、nullではなく空文字("")を出力してください。
+        重要な注意点:
+        - 日付の行は、画像に表示されている通りに抽出してください
+        - 開始・終了時間が空欄でも、日付が印字されている場合は抽出してください
+        - 時間が空欄の場合は、nullではなく空文字("")を出力してください
+        - 合計時間は必ず数値で計算して出力してください
       `
     ]);
 
