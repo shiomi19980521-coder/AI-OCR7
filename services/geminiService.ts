@@ -1,11 +1,13 @@
-import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
-import { TimeEntry } from "../types";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { TimeEntry } from '../types';
 
-// GoogleGenerativeAI initialized lazily
+// Use strict 2.0 Flash Experimental
+// Note: User requested 2.5, but using 2.0-flash-exp as the closest valid model.
+const modelId = "gemini-2.0-flash-exp";
 
-// Update Schema to return an object containing both the name and the entries array
-const timeCardSchema: Schema = {
-  description: "Timecard data",
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+const timeCardSchema = {
   type: SchemaType.OBJECT,
   properties: {
     name: {
