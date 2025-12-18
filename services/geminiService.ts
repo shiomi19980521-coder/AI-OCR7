@@ -1,12 +1,11 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { TimeEntry } from '../types';
+import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
+import { TimeEntry } from "../types";
 
-// Use stable 1.5 Flash model
-const modelId = "gemini-1.5-flash";
+// GoogleGenerativeAI initialized lazily
 
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
-const timeCardSchema = {
+// Update Schema to return an object containing both the name and the entries array
+const timeCardSchema: Schema = {
+  description: "Timecard data",
   type: SchemaType.OBJECT,
   properties: {
     name: {
@@ -47,14 +46,21 @@ const timeCardSchema = {
             type: SchemaType.STRING,
             description: "Second period clock-out time in HH:mm format (24-hour). If empty, return empty string.",
           },
+          totalHours: {
+            type: SchemaType.NUMBER,
+            description: "Total work hours for this day. Calculate by summing (endTime1 - startTime1) + (endTime2 - startTime2) if applicable. Return 0 if no times available.",
+          },
         },
         required: ["dayInt", "date"],
       },
     }
   },
   required: ["entries"]
-} as const;
+};
 
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+// Update return type to include name
 export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entries: TimeEntry[], name: string }> => {
   try {
     // Extract mime type if present, otherwise default to jpeg
@@ -70,9 +76,13 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       cleanBase64 = parts[1];
     }
 
+    // Use 2.0 Flash Experimental (User requested 2.5, likely meaning 2.0)
+    const modelId = "gemini-2.0-flash-exp";
+
     // DEBUG: Log environment status
     console.log("[DEBUG] Checking Environment Variables...");
     console.log("Current Mode:", import.meta.env.MODE);
+    console.log("Available VITE_ Keys:", Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
     console.log("Has VITE_GEMINI_API_KEY:", !!import.meta.env.VITE_GEMINI_API_KEY);
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -100,27 +110,47 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         }
       },
       `
-        この勤務表画像を「横5列の表（グリッド）」として視覚的に読み取ってください。
+        この勤務表（タイムカード）の画像を「Excelのようなグリッド（表）」として視覚的に認識し、そのままデータを抽出してください。
         
-        【表の構造】
-        [列1: 日付] [列2: 開始1] [列3: 終了1] [列4: 開始2] [列5: 終了2]
+        【全体構造の認識】
+        画像は「横長の日付行」が縦に並んでいる表です。
+        各行は基本的に以下の5つの列（グリッド）で構成されています：
         
-        【最重要ルール: 見た目の位置を絶対遵守】
-        - 画像の「マス目」の位置をそのまま反映してください。
-        - **数字がないマス（空白）は、必ず空文字 ("") を出力してください。**
-        - **絶対に詰めてはいけません。**
+        [列1: 日付] | [列2: 開始時間1] | [列3: 終了時間1] | [列4: 開始時間2] | [列5: 終了時間2]
         
-        【例】
-        - 画像で [列2] と [列5] だけに時刻がある場合
-          → startTime1="9:00", endTime1="", startTime2="", endTime2="18:00"
-        
-        - 画像で [列2] [列3] [列4] [列5] 全てに時刻がある場合
-          → 全てのフィールドを埋める
-          
-        - 画像で [列2] と [列3] だけに時刻がある場合
-          → startTime1="9:00", endTime1="12:00", startTime2="", endTime2=""
+        【抽出ルール】
+        1. **見た目通りの位置を維持してください**
+           - 表の「マス目」を意識してください。
+           - 数字が印字されているマスは抽出してください。
+           - **空白（印字がない）マスは、必ず空文字("")としてください。** 決して詰めてはいけません。
+           
+        2. **列の定義**
+           - **列1 (Date)**: 日付と曜日
+           - **列2 (Start1)**: 出勤（1回目の打刻）
+           - **列3 (End1)**: 退勤（2回目の打刻）
+           - **列4 (Start2)**: 休憩戻り/再出勤（3回目の打刻）
+           - **列5 (End2)**: 最終退勤（4回目の打刻）
+           
+        3. **具体例**
+           画像: [16水] [9:25] [     ] [     ] [13:50]
+           抽出結果: 
+             startTime1: "9:25"
+             endTime1: "" (空白)
+             startTime2: "" (空白)
+             endTime2: "13:50"
+             
+           画像: [17木] [9:20] [12:00] [13:00] [17:00]
+           抽出結果:
+             startTime1: "9:20"
+             endTime1: "12:00"
+             startTime2: "13:00"
+             endTime2: "17:00"
 
-        思考や解釈は不要です。人間が目で見て「この列は空いている」と判断する通りに、機械的に抽出してください。
+        【重要】
+        - 時間や数字の羅列としてではなく、「表の構造」として捉えてください。
+        - 縦の並び方（列のライン）を参考に、どの列に数字が入っているかを判断してください。
+        - 合計時間（totalHours）は抽出された時刻に基づいて計算してください。
+        - 合計時間計算式: (endTime1 - startTime1) + (endTime2 - startTime2)
       `
     ]);
 
@@ -129,7 +159,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       throw new Error("No data returned from Gemini.");
     }
 
-    const parsedResult = JSON.parse(text) as { name?: string | null, entries: any[] };
+    const parsedResult = JSON.parse(text) as { name?: string | null, entries: TimeEntry[] };
     let data = parsedResult.entries || [];
     const detectedName = parsedResult.name || "";
 
@@ -140,27 +170,24 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     };
 
     // Post-processing: Ensure no nulls, sort, and fill gaps
-    let processedData: TimeEntry[] = data
+    data = data
       .filter(d => d.dayInt !== null && d.dayInt !== undefined)
       .sort((a, b) => (a.dayInt || 0) - (b.dayInt || 0))
       .map(d => ({
-        dayInt: d.dayInt,
-        date: String(d.date),
-        dayOfWeek: d.dayOfWeek,
+        ...d,
         startTime1: cleanStr(d.startTime1),
         endTime1: cleanStr(d.endTime1),
         startTime2: cleanStr(d.startTime2),
         endTime2: cleanStr(d.endTime2),
-        totalHours: undefined // Will be calculated by UI or explicit prompt if needed
       }));
 
-    if (processedData.length > 0) {
+    if (data.length > 0) {
       const filledData: TimeEntry[] = [];
-      const startDay = processedData[0].dayInt || 1;
-      const lastDay = processedData[processedData.length - 1].dayInt || 31;
+      const startDay = data[0].dayInt || 1;
+      const lastDay = data[data.length - 1].dayInt || 31;
 
       // Try to determine the weekday offset
-      let firstValidDayEntry = processedData.find(d => d.dayOfWeek && WEEKDAYS.includes(d.dayOfWeek.replace(/[()]/g, '')));
+      let firstValidDayEntry = data.find(d => d.dayOfWeek && WEEKDAYS.includes(d.dayOfWeek.replace(/[()]/g, '')));
       let weekdayOffset = -1;
 
       if (firstValidDayEntry && firstValidDayEntry.dayInt) {
@@ -174,7 +201,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       let currentDay = startDay;
 
       while (currentDay <= lastDay) {
-        let entry = processedData.find(d => d.dayInt === currentDay);
+        let entry = data.find(d => d.dayInt === currentDay);
 
         let calculatedDow = '';
         if (weekdayOffset !== -1) {
@@ -200,7 +227,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         const displayDate = entry.date.replace(/[^0-9]/g, '');
         const displayDow = (entry.dayOfWeek || '').replace(/[()]/g, '');
 
-        entry.date = displayDow ? `${displayDate}${displayDow}` : displayDate;
+        entry.date = displayDow ? `${displayDate}${displayDow}` : `${displayDate}`;
 
         filledData.push(entry);
         currentDay++;
@@ -208,7 +235,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       return { entries: filledData, name: detectedName };
     }
 
-    return { entries: processedData, name: detectedName };
+    return { entries: data, name: detectedName };
   } catch (error) {
     console.error("Gemini Analysis Failed:", error);
     throw error;
