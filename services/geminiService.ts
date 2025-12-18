@@ -150,9 +150,18 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
            - **列5 (End2)**: 最終退勤
            
         3. **合計時間（totalHours）の計算ルール**
-           - 基本式: (endTime1 - startTime1) + (endTime2 - startTime2)
-           - **例外パターン**: endTime1 と startTime2 が空で、endTime2 だけがある場合（例：8:55 ... 17:05）
-             -> 計算式: endTime2 - startTime1 で計算してください。
+           
+           【ケース1: 4回すべての時刻がある場合】
+           計算式: (endTime1 - startTime1) + (endTime2 - startTime2)
+           ※これが基本です。必ずこの式で計算してください。
+           
+           【ケース2: 真ん中が空いている場合 (例外)】
+           例：[8:55] [空] [空] [17:05]
+           計算式: endTime2 - startTime1 
+           
+           【ケース3: 2回のみ (前半のみ) の場合】
+           例：[9:00] [12:00] [空] [空]
+           計算式: endTime1 - startTime1
       `
     ]);
 
