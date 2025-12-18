@@ -1,9 +1,8 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { TimeEntry } from '../types';
 
-// Use strict 2.0 Flash Experimental
-// Note: User requested 2.5, but using 2.0-flash-exp as the closest valid model.
-const modelId = "gemini-2.0-flash-exp";
+// Use stable 1.5 Flash model
+const modelId = "gemini-1.5-flash";
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
