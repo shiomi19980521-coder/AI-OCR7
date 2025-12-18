@@ -218,12 +218,8 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
             startTime2: '',
             endTime2: '',
           };
-        } else {
-          // STRICT RULE: Enforce sequential weekday order if we have established an offset
-          // This fixes OCR errors where it might read "Thu" -> "Thu" instead of "Thu" -> "Fri"
-          if (calculatedDow) {
-            entry.dayOfWeek = calculatedDow;
-          }
+        } else if (!entry.dayOfWeek && calculatedDow) {
+          entry.dayOfWeek = calculatedDow;
         }
 
         // Format the date string to be "20土" style
