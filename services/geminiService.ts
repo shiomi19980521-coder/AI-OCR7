@@ -120,28 +120,25 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         
         【重要：列の判断基準】
         画像を見て、**縦の列の位置関係**を厳密に守ってください。
-                     
-           ★最重要ルール（中抜けパターン）:
-           画像: [16水] [9:25] [     ] [     ] [17:05]
-           左端に「9:25」、真ん中が大きく空いて、右端に「17:05」がある場合。
-           
-           誤った抽出（禁止）:
-           startTime1: "9:25", endTime1: "17:05" (詰めないでください！)
-           
-           正しい抽出:
-           startTime1: "9:25"
-           endTime1: ""
-           startTime2: ""
-           endTime2: "17:05" (必ず列の位置を守る)
-
+                3. **具体例**
+           画像: [16水] [9:25] [     ] [     ] [13:50]
+           抽出結果: 
+             startTime1: "9:25"
+             endTime1: ""
+             startTime2: ""
+             endTime2: "13:50"
+             totalHours: 4.42 (13:50-9:25 = 4h25m)
+             
            画像: [17木] [9:20] [12:00] [13:00] [17:00]
-           正しい抽出:
-             startTime1: "9:20", endTime1: "12:00", startTime2: "13:00", endTime2: "17:00"
+           抽出結果:
+             startTime1: "9:20"
+             endTime1: "12:00"
+             startTime2: "13:00"
+             endTime2: "17:00"
+             totalHours: 6.67 (2h40m + 4h = 6h40m)
 
-         【抽出ルール】
-         1. **見た目通りの位置を維持してください**
-            - 2つの時間がある時、それらが「隣同士」か「離れているか」を確認してください。
-            - 離れている場合は、必ず間に空文字を入れてください。
+        【抽出ルール】
+        1. **見た目通りの位置を維持してください**
            - 表の「マス目」を意識してください。
            - ヘッダー（「入」「退」「入/時数」「退」など）があれば、それに従ってください。
            
@@ -174,50 +171,17 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       return String(val);
     };
 
-    // Helper to calculate minutes from HH:mm
-    const toMinutes = (timeStr: string): number => {
-      if (!timeStr || !timeStr.includes(':')) return 0;
-      const [paramH, paramM] = timeStr.split(':').map(Number);
-      if (isNaN(paramH) || isNaN(paramM)) return 0;
-      return paramH * 60 + paramM;
-    };
-
     // Post-processing: Ensure no nulls, sort, and fill gaps
     data = data
       .filter(d => d.dayInt !== null && d.dayInt !== undefined)
       .sort((a, b) => (a.dayInt || 0) - (b.dayInt || 0))
-      .map(d => {
-        const entry = {
-          ...d,
-          startTime1: cleanStr(d.startTime1),
-          endTime1: cleanStr(d.endTime1),
-          startTime2: cleanStr(d.startTime2),
-          endTime2: cleanStr(d.endTime2),
-        };
-
-        // Recalculate totalHours strictly based on timestamps
-        let totalMins = 0;
-        const s1 = toMinutes(entry.startTime1);
-        const e1 = toMinutes(entry.endTime1);
-        const s2 = toMinutes(entry.startTime2);
-        const e2 = toMinutes(entry.endTime2);
-
-        // Logic:
-        // 1. If we have Start1 and End2 ONLY (skipped middle), Duration = End2 - Start1
-        if (s1 > 0 && e2 > 0 && e1 === 0 && s2 === 0) {
-          totalMins = Math.max(0, e2 - s1);
-        } else {
-          // 2. Normal case: (End1 - Start1) + (End2 - Start2)
-          const p1 = (s1 > 0 && e1 > 0) ? Math.max(0, e1 - s1) : 0;
-          const p2 = (s2 > 0 && e2 > 0) ? Math.max(0, e2 - s2) : 0;
-          totalMins = p1 + p2;
-        }
-
-        // Convert back to hours (decimal)
-        entry.totalHours = totalMins > 0 ? Number((totalMins / 60).toFixed(2)) : 0;
-
-        return entry;
-      });
+      .map(d => ({
+        ...d,
+        startTime1: cleanStr(d.startTime1),
+        endTime1: cleanStr(d.endTime1),
+        startTime2: cleanStr(d.startTime2),
+        endTime2: cleanStr(d.endTime2),
+      }));
 
     if (data.length > 0) {
       const filledData: TimeEntry[] = [];
@@ -236,6 +200,14 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         }
       }
 
+      // Helper to parse "HH:mm" to minutes
+      const parseToMinutes = (timeStr: string): number => {
+        if (!timeStr) return 0;
+        const [h, m] = timeStr.split(':').map(Number);
+        if (isNaN(h) || isNaN(m)) return 0;
+        return h * 60 + m;
+      };
+
       let currentDay = startDay;
 
       while (currentDay <= lastDay) {
@@ -247,7 +219,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         }
 
         if (!entry) {
-          // Create gap entry with empty strings (not null)
+          // Create gap entry with empty strings
           entry = {
             dayInt: currentDay,
             date: `${currentDay}`,
@@ -256,9 +228,42 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
             endTime1: '',
             startTime2: '',
             endTime2: '',
+            totalHours: 0
           };
-        } else if (!entry.dayOfWeek && calculatedDow) {
-          entry.dayOfWeek = calculatedDow;
+        } else {
+          if (!entry.dayOfWeek && calculatedDow) {
+            entry.dayOfWeek = calculatedDow;
+          }
+
+          // STRICT CALCULATION LOGIC (Overwriting AI's totalHours)
+          // Rule 1: If endTime2 exists but (endTime1 & startTime2) are empty -> Calculate endTime2 - startTime1
+          // Rule 2: Otherwise -> (endTime1 - startTime1) + (endTime2 - startTime2)
+
+          const s1 = parseToMinutes(entry.startTime1);
+          const e1 = parseToMinutes(entry.endTime1);
+          const s2 = parseToMinutes(entry.startTime2);
+          const e2 = parseToMinutes(entry.endTime2);
+
+          let totalMinutes = 0;
+
+          // Checks for strict column logic pattern: [S1] [ ] [ ] [E2]
+          const hasS1 = !!entry.startTime1;
+          const hasE1 = !!entry.endTime1;
+          const hasS2 = !!entry.startTime2;
+          const hasE2 = !!entry.endTime2;
+
+          if (hasS1 && !hasE1 && !hasS2 && hasE2) {
+            // Exception Pattern: 8:55 ... ... 17:05
+            totalMinutes = Math.max(0, e2 - s1);
+          } else {
+            // Standard Pattern
+            const p1 = (hasS1 && hasE1) ? Math.max(0, e1 - s1) : 0;
+            const p2 = (hasS2 && hasE2) ? Math.max(0, e2 - s2) : 0;
+            totalMinutes = p1 + p2;
+          }
+
+          // Round to 2 decimal places for hours
+          entry.totalHours = Math.round((totalMinutes / 60) * 100) / 100;
         }
 
         // Format the date string to be "20土" style
