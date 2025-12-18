@@ -185,44 +185,17 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       const startDay = data[0].dayInt || 1;
       const lastDay = data[data.length - 1].dayInt || 31;
 
-      // -----------------------------------------------------------------------
-      // ROBUST WEEKDAY LOGIC: Majority Voting Strategy
-      // -----------------------------------------------------------------------
-      // Instead of trusting the first weekday, we check ALL rows.
-      // We calculate what the "offset" would be for each row if its weekday was correct.
-      // Then we pick the most common offset (the "consensus").
+      // Try to determine the weekday offset
+      let firstValidDayEntry = data.find(d => d.dayOfWeek && WEEKDAYS.includes(d.dayOfWeek.replace(/[()]/g, '')));
+      let weekdayOffset = -1;
 
-      const offsetCounts: { [key: number]: number } = {};
-
-      data.forEach(d => {
-        if (d.dayInt && d.dayOfWeek) {
-          const cleanDow = d.dayOfWeek.replace(/[()]/g, '');
-          const dowIndex = WEEKDAYS.indexOf(cleanDow);
-          if (dowIndex !== -1) {
-            // Calculate offset: (DayOfWeekIndex - DayOfMonth + 700) % 7
-            // Adding 700 to ensure positive result before modulo
-            const offset = (dowIndex - (d.dayInt % 7) + 700) % 7;
-            offsetCounts[offset] = (offsetCounts[offset] || 0) + 1;
-          }
+      if (firstValidDayEntry && firstValidDayEntry.dayInt) {
+        const cleanDow = firstValidDayEntry.dayOfWeek.replace(/[()]/g, '');
+        const dowIndex = WEEKDAYS.indexOf(cleanDow);
+        if (dowIndex !== -1) {
+          weekdayOffset = (dowIndex - (firstValidDayEntry.dayInt % 7) + 7) % 7;
         }
-      });
-
-      // Find the most frequent offset (Mode)
-      let bestOffset = -1;
-      let maxCount = 0;
-
-      Object.entries(offsetCounts).forEach(([offsetStr, count]) => {
-        const countNum = count as number;
-        if (countNum > maxCount) {
-          maxCount = countNum;
-          bestOffset = parseInt(offsetStr);
-        }
-      });
-
-      console.log("[DEBUG] Weekday Offset Counts:", offsetCounts);
-      console.log("[DEBUG] Best Offset Selected:", bestOffset, "with votes:", maxCount);
-
-      // -----------------------------------------------------------------------
+      }
 
       let currentDay = startDay;
 
@@ -230,8 +203,8 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         let entry = data.find(d => d.dayInt === currentDay);
 
         let calculatedDow = '';
-        if (bestOffset !== -1) {
-          calculatedDow = WEEKDAYS[(currentDay + bestOffset) % 7];
+        if (weekdayOffset !== -1) {
+          calculatedDow = WEEKDAYS[(currentDay + weekdayOffset) % 7];
         }
 
         if (!entry) {
@@ -246,7 +219,8 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
             endTime2: '',
           };
         } else {
-          // Override with consensus weekday if available
+          // STRICT RULE: Enforce sequential weekday order if we have established an offset
+          // This fixes OCR errors where it might read "Thu" -> "Thu" instead of "Thu" -> "Fri"
           if (calculatedDow) {
             entry.dayOfWeek = calculatedDow;
           }
