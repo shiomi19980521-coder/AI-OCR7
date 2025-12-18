@@ -47,21 +47,14 @@ const timeCardSchema = {
             type: SchemaType.STRING,
             description: "Second period clock-out time in HH:mm format (24-hour). If empty, return empty string.",
           },
-          totalHours: {
-            type: SchemaType.NUMBER,
-            description: "Total work hours for this day. Calculate by summing (endTime1 - startTime1) + (endTime2 - startTime2) if applicable. Return 0 if no times available.",
-          },
         },
         required: ["dayInt", "date"],
       },
     }
   },
   required: ["entries"]
-};
+} as const;
 
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
-// Update return type to include name
 export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entries: TimeEntry[], name: string }> => {
   try {
     // Extract mime type if present, otherwise default to jpeg
@@ -77,13 +70,9 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       cleanBase64 = parts[1];
     }
 
-    // Use 2.0 Flash Experimental (User requested 2.5, likely meaning 2.0)
-    const modelId = "gemini-2.0-flash-exp";
-
     // DEBUG: Log environment status
     console.log("[DEBUG] Checking Environment Variables...");
     console.log("Current Mode:", import.meta.env.MODE);
-    console.log("Available VITE_ Keys:", Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
     console.log("Has VITE_GEMINI_API_KEY:", !!import.meta.env.VITE_GEMINI_API_KEY);
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -111,34 +100,27 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         }
       },
       `
-        この勤務表（タイムカード）の画像を解析し、データを抽出してください。
+        この勤務表画像を「横5列の表（グリッド）」として視覚的に読み取ってください。
         
-        【最重要ルール: 見えたまま順番に羅列する】
-        画像の各行について、**印字されている「時刻（H:mm）」を左から右へ見たままの順番ですべて抽出してください。**
-        列の位置や間隔、意味（出勤/退勤など）は一切考えないでください。単に数字文字を拾うだけです。
-
-        【マッピングルール】
-        拾い出した時刻の「数」に応じて、自動的に以下のように割り当ててください：
-
-        ■時刻が 2つ 見つかった場合:
-          1番目 → startTime1
-          2番目 → endTime1
-          (他は空文字)
-
-        ■時刻が 4つ 見つかった場合:
-          1番目 → startTime1
-          2番目 → endTime1
-          3番目 → startTime2
-          4番目 → endTime2
-
-        ※重要: 真ん中の時刻（休憩等）が読み取れないという問題が発生しています。
-        間隔が狭くても、文字が薄くても、とにかく「数字の塊」があれば全て拾ってください。
+        【表の構造】
+        [列1: 日付] [列2: 開始1] [列3: 終了1] [列4: 開始2] [列5: 終了2]
         
-        【出力フォーマット】
-        - 日付: 画像の左端にある日付
-        - 曜日: 画像の曜日
-        - startTime1, endTime1, startTime2, endTime2: 上記ルールで割り当てた文字列（ない場合は空文字）
-        - totalHours: 割り当てられた時刻から計算 ((endTime1-startTime1) + (endTime2-startTime2)) ※数値で出力
+        【最重要ルール: 見た目の位置を絶対遵守】
+        - 画像の「マス目」の位置をそのまま反映してください。
+        - **数字がないマス（空白）は、必ず空文字 ("") を出力してください。**
+        - **絶対に詰めてはいけません。**
+        
+        【例】
+        - 画像で [列2] と [列5] だけに時刻がある場合
+          → startTime1="9:00", endTime1="", startTime2="", endTime2="18:00"
+        
+        - 画像で [列2] [列3] [列4] [列5] 全てに時刻がある場合
+          → 全てのフィールドを埋める
+          
+        - 画像で [列2] と [列3] だけに時刻がある場合
+          → startTime1="9:00", endTime1="12:00", startTime2="", endTime2=""
+
+        思考や解釈は不要です。人間が目で見て「この列は空いている」と判断する通りに、機械的に抽出してください。
       `
     ]);
 
@@ -147,7 +129,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       throw new Error("No data returned from Gemini.");
     }
 
-    const parsedResult = JSON.parse(text) as { name?: string | null, entries: TimeEntry[] };
+    const parsedResult = JSON.parse(text) as { name?: string | null, entries: any[] };
     let data = parsedResult.entries || [];
     const detectedName = parsedResult.name || "";
 
@@ -158,24 +140,27 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     };
 
     // Post-processing: Ensure no nulls, sort, and fill gaps
-    data = data
+    let processedData: TimeEntry[] = data
       .filter(d => d.dayInt !== null && d.dayInt !== undefined)
       .sort((a, b) => (a.dayInt || 0) - (b.dayInt || 0))
       .map(d => ({
-        ...d,
+        dayInt: d.dayInt,
+        date: String(d.date),
+        dayOfWeek: d.dayOfWeek,
         startTime1: cleanStr(d.startTime1),
         endTime1: cleanStr(d.endTime1),
         startTime2: cleanStr(d.startTime2),
         endTime2: cleanStr(d.endTime2),
+        totalHours: undefined // Will be calculated by UI or explicit prompt if needed
       }));
 
-    if (data.length > 0) {
+    if (processedData.length > 0) {
       const filledData: TimeEntry[] = [];
-      const startDay = data[0].dayInt || 1;
-      const lastDay = data[data.length - 1].dayInt || 31;
+      const startDay = processedData[0].dayInt || 1;
+      const lastDay = processedData[processedData.length - 1].dayInt || 31;
 
       // Try to determine the weekday offset
-      let firstValidDayEntry = data.find(d => d.dayOfWeek && WEEKDAYS.includes(d.dayOfWeek.replace(/[()]/g, '')));
+      let firstValidDayEntry = processedData.find(d => d.dayOfWeek && WEEKDAYS.includes(d.dayOfWeek.replace(/[()]/g, '')));
       let weekdayOffset = -1;
 
       if (firstValidDayEntry && firstValidDayEntry.dayInt) {
@@ -189,7 +174,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       let currentDay = startDay;
 
       while (currentDay <= lastDay) {
-        let entry = data.find(d => d.dayInt === currentDay);
+        let entry = processedData.find(d => d.dayInt === currentDay);
 
         let calculatedDow = '';
         if (weekdayOffset !== -1) {
@@ -215,7 +200,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         const displayDate = entry.date.replace(/[^0-9]/g, '');
         const displayDow = (entry.dayOfWeek || '').replace(/[()]/g, '');
 
-        entry.date = displayDow ? `${displayDate}${displayDow}` : `${displayDate}`;
+        entry.date = displayDow ? `${displayDate}${displayDow}` : displayDate;
 
         filledData.push(entry);
         currentDay++;
@@ -223,7 +208,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       return { entries: filledData, name: detectedName };
     }
 
-    return { entries: data, name: detectedName };
+    return { entries: processedData, name: detectedName };
   } catch (error) {
     console.error("Gemini Analysis Failed:", error);
     throw error;
