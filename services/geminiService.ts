@@ -171,17 +171,50 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       return String(val);
     };
 
+    // Helper to calculate minutes from HH:mm
+    const toMinutes = (timeStr: string): number => {
+      if (!timeStr || !timeStr.includes(':')) return 0;
+      const [paramH, paramM] = timeStr.split(':').map(Number);
+      if (isNaN(paramH) || isNaN(paramM)) return 0;
+      return paramH * 60 + paramM;
+    };
+
     // Post-processing: Ensure no nulls, sort, and fill gaps
     data = data
       .filter(d => d.dayInt !== null && d.dayInt !== undefined)
       .sort((a, b) => (a.dayInt || 0) - (b.dayInt || 0))
-      .map(d => ({
-        ...d,
-        startTime1: cleanStr(d.startTime1),
-        endTime1: cleanStr(d.endTime1),
-        startTime2: cleanStr(d.startTime2),
-        endTime2: cleanStr(d.endTime2),
-      }));
+      .map(d => {
+        const entry = {
+          ...d,
+          startTime1: cleanStr(d.startTime1),
+          endTime1: cleanStr(d.endTime1),
+          startTime2: cleanStr(d.startTime2),
+          endTime2: cleanStr(d.endTime2),
+        };
+
+        // Recalculate totalHours strictly based on timestamps
+        let totalMins = 0;
+        const s1 = toMinutes(entry.startTime1);
+        const e1 = toMinutes(entry.endTime1);
+        const s2 = toMinutes(entry.startTime2);
+        const e2 = toMinutes(entry.endTime2);
+
+        // Logic:
+        // 1. If we have Start1 and End2 ONLY (skipped middle), Duration = End2 - Start1
+        if (s1 > 0 && e2 > 0 && e1 === 0 && s2 === 0) {
+          totalMins = Math.max(0, e2 - s1);
+        } else {
+          // 2. Normal case: (End1 - Start1) + (End2 - Start2)
+          const p1 = (s1 > 0 && e1 > 0) ? Math.max(0, e1 - s1) : 0;
+          const p2 = (s2 > 0 && e2 > 0) ? Math.max(0, e2 - s2) : 0;
+          totalMins = p1 + p2;
+        }
+
+        // Convert back to hours (decimal)
+        entry.totalHours = totalMins > 0 ? Number((totalMins / 60).toFixed(2)) : 0;
+
+        return entry;
+      });
 
     if (data.length > 0) {
       const filledData: TimeEntry[] = [];
