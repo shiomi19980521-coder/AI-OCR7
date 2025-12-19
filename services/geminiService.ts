@@ -118,43 +118,25 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         2. 勤怠データ（Entries）:
             - 日付 (数字のみ抽出)
             - 曜日 (日本語の曜日一文字)
-            - 時刻データの抽出ルール（【重要】左から右へ順番に割り当ててください）:
+            - 時刻データの抽出ルール（シンプルに左から順に抽出）:
               
-              画像の日付行にある「時刻のような数字（H:mm）」をすべて拾ってください。
+              画像の日付行にある「時間を表す数字（H:mm）」を、左から順番にそのまま抽出してください。
+              余計な判断や除外（合計時間の除外など）は一切行わず、見えた数字をそのままフィールドに埋めてください。
+
+              1つ目の数字 → startTime1
+              2つ目の数字 → endTime1
+              3つ目の数字 → startTime2
+              4つ目の数字 → endTime2
               
-              【パターンA: 数字が2つある場合】
-              1つ目 → startTime1 (出勤)
-              2つ目 → endTime1 (退勤)
-              (startTime2, endTime2 は空文字)
-              
-              【パターンB: 数字が4つある場合】
-              1つ目 → startTime1 (出勤)
-              2つ目 → endTime1 (休憩開始/退勤)
-              3つ目 → startTime2 (休憩終了/再出勤)
-              4つ目 → endTime2 (退勤)
-              
-              ※数字の間隔や配置位置に関わらず、とにかく「左から何番目にあるか」だけで判定してください。
-              ※「12:00」や「13:00」なども休憩ではなく「時刻」として扱って上記の順に割り当ててください。
-              
-              【重要：合計時間カラムの除外ルール】
-              もし行の中に「時刻のような数字」が奇数個（3個や5個）見つかった場合、
-              最後の数字は「すでに計算された合計時間（例: 8:10）」である可能性が高いです。
-              その場合は、最後の数字を無視して、残りの偶数個（2個または4個）だけを使用してください。
-              
-              例: "9:00 17:00 8:00" (3個) → "9:00"と"17:00"を採用、"8:00"は無視
-              例: "9:00 12:00 13:00 17:00 7:00" (5個) → 前半4つを採用、"7:00"は無視
+              ※もし3つしか数字がない場合は、3つ目まで埋めてください（startTime2に入る）。
+              ※もし5つ以上ある場合は、最初の4つだけを抽出してください。
               
             - 合計時間（totalHours）:
-              * 1日の総労働時間を計算してください
-              * 計算例 (パターンB): (2つ目 - 1つ目) + (4つ目 - 3つ目)
-              * 例: 9:00, 12:00, 13:00, 18:00 の場合
-                (12:00-9:00 = 3h) + (18:00-13:00 = 5h) = 8.0時間
-              * 時刻データがない場合は 0 を出力してください
+               (退勤1 - 出勤1) + (退勤2 - 出勤2) で計算してください。
         
         重要な注意点:
         - 縦線や枠線は無視して、行にある数字を左から順に拾ってください。
-        - 時間が空欄の場合は、nullではなく空文字("")を出力してください
-        - 合計時間は必ず数値（小数点形式）で計算して出力してください
+        - 時間が空欄の場合は、nullではなく空文字("")を出力してください。
       `
     ]);
 
@@ -216,7 +198,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
           // Create gap entry with empty strings (not null)
           entry = {
             dayInt: currentDay,
-            date: `${currentDay}`,
+            date: `${currentDay} `,
             dayOfWeek: calculatedDow,
             startTime1: '',
             endTime1: '',
@@ -231,7 +213,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         const displayDate = entry.date.replace(/[^0-9]/g, '');
         const displayDow = (entry.dayOfWeek || '').replace(/[()]/g, '');
 
-        entry.date = displayDow ? `${displayDate}${displayDow}` : `${displayDate}`;
+        entry.date = displayDow ? `${displayDate}${displayDow} ` : `${displayDate} `;
 
         filledData.push(entry);
         currentDay++;
