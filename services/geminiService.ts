@@ -173,35 +173,26 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         ...d,
         startTime1: cleanStr(d.startTime1),
         endTime1: cleanStr(d.endTime1),
+        startTime2: cleanStr(d.startTime2),
         endTime2: cleanStr(d.endTime2),
       }));
-
-    // --- Post-processing: Correct Day of Week Inconsistencies ---
-    if (data.length > 0) {
-      data = correctDayOfWeekSequence(data);
-    }
-    // ------------------------------------------------------------
 
     if (data.length > 0) {
       const filledData: TimeEntry[] = [];
       const startDay = data[0].dayInt || 1;
       const lastDay = data[data.length - 1].dayInt || 31;
 
-      // ... (rest of logic) ...
-
       // Try to determine the weekday offset
       let firstValidDayEntry = data.find(d => d.dayOfWeek && WEEKDAYS.includes(d.dayOfWeek.replace(/[()]/g, '')));
       let weekdayOffset = -1;
 
       if (firstValidDayEntry && firstValidDayEntry.dayInt) {
-        // Re-calculate offset based on the CORRECTED sequence
         const cleanDow = firstValidDayEntry.dayOfWeek.replace(/[()]/g, '');
         const dowIndex = WEEKDAYS.indexOf(cleanDow);
         if (dowIndex !== -1) {
           weekdayOffset = (dowIndex - (firstValidDayEntry.dayInt % 7) + 7) % 7;
         }
       }
-
 
       let currentDay = startDay;
 
@@ -235,67 +226,14 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         entry.date = displayDow ? `${displayDate}${displayDow}` : `${displayDate}`;
 
         filledData.push(entry);
+        currentDay++;
       }
       return { entries: filledData, name: detectedName };
     }
 
-    return { entries: [], name: detectedName };
+    return { entries: data, name: detectedName };
   } catch (error) {
     console.error("Gemini Analysis Failed:", error);
-    throw new Error(error instanceof Error ? error.message : "解析に失敗しました");
+    throw error;
   }
-};
-
-// Helper function to correct day of week sequences based on majority voting
-function correctDayOfWeekSequence(entries: TimeEntry[]): TimeEntry[] {
-  const dowMap: { [key: string]: number } = { "日": 0, "月": 1, "火": 2, "水": 3, "木": 4, "金": 5, "土": 6 };
-  const revDowMap: string[] = ["日", "月", "火", "水", "木", "金", "土"];
-
-  // 1. Vote for "Day 1's Day-of-Week"
-  const votes: { [key: number]: number } = {};
-
-  entries.forEach(entry => {
-    if (!entry.dayInt || !entry.dayOfWeek) return;
-
-    // Normalize simple errors (e.g., if OCR reads weird chars, try to map strict or ignore)
-    const dow = dowMap[entry.dayOfWeek.trim()];
-    if (dow === undefined) return;
-
-    // Calculate what Day 1 would be assuming this entry is correct
-    // (CurrentDow - (DayInt - 1)) % 7
-    // Using math to handle negative modulo: ((a % n) + n) % n
-    const offset = entry.dayInt - 1;
-    const impliedDay1 = ((dow - offset) % 7 + 7) % 7;
-
-    votes[impliedDay1] = (votes[impliedDay1] || 0) + 1;
-  });
-
-  // 2. Find winner
-  let bestDay1 = -1;
-  let maxVote = -1;
-  Object.keys(votes).forEach(keyStr => {
-    const key = parseInt(keyStr);
-    if (votes[key] > maxVote) {
-      maxVote = votes[key];
-      bestDay1 = key;
-    }
-  });
-
-  // If no valid votes, return original
-  if (bestDay1 === -1) return entries;
-
-  // 3. Apply correction
-  return entries.map(entry => {
-    if (!entry.dayInt) return entry;
-
-    const correctDowIndex = (bestDay1 + (entry.dayInt - 1)) % 7;
-    const correctDow = revDowMap[correctDowIndex];
-
-    // Only update if it's different and valid
-    if (entry.dayOfWeek !== correctDow) {
-      // console.log(`Auto-correcting date ${entry.dayInt}: ${entry.dayOfWeek} -> ${correctDow}`);
-      return { ...entry, dayOfWeek: correctDow };
-    }
-    return entry;
-  });
 };
