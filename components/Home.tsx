@@ -101,11 +101,28 @@ export const Home: React.FC = () => {
       if (session?.user) {
         updateUserFromSession(session.user);
       } else {
-        // Fallback to local storage if no session (optional, but good for persistence if offline)
-        // Note: For rate limiting, we strictly rely on backend/session data when logged in.
-        // If logged out/offline, we can default to 0 or block usage if strict auth required.
-        // Here we keep existing fallback for user object but reset usage to 0 if no session.
-        setDailyUsage(0);
+        // Guest User: Load usage from localStorage
+        try {
+          const storedUsage = localStorage.getItem('smarttime_ocr_guest_usage');
+          if (storedUsage) {
+            const { date, count } = JSON.parse(storedUsage);
+            if (date === getTodayString()) {
+              setDailyUsage(count);
+            } else {
+              // Reset usage if date changed
+              setDailyUsage(0);
+              localStorage.setItem('smarttime_ocr_guest_usage', JSON.stringify({
+                date: getTodayString(),
+                count: 0
+              }));
+            }
+          } else {
+            setDailyUsage(0);
+          }
+        } catch (e) {
+          console.error("Failed to load guest usage:", e);
+          setDailyUsage(0);
+        }
       }
     });
 
@@ -115,7 +132,20 @@ export const Home: React.FC = () => {
         updateUserFromSession(session.user);
       } else if (_event === 'SIGNED_OUT') {
         setUser(null);
-        setDailyUsage(0);
+        // Fallback to guest usage
+        try {
+          const storedUsage = localStorage.getItem('smarttime_ocr_guest_usage');
+          if (storedUsage) {
+            const { date, count } = JSON.parse(storedUsage);
+            if (date === getTodayString()) {
+              setDailyUsage(count);
+            } else {
+              setDailyUsage(0);
+            }
+          }
+        } catch {
+          setDailyUsage(0);
+        }
         setSheetSettings({ id: '' });
       }
     });
@@ -127,13 +157,21 @@ export const Home: React.FC = () => {
     const newCount = dailyUsage + amount;
     setDailyUsage(newCount);
 
-    // Persist to Supabase
-    await supabase.auth.updateUser({
-      data: {
-        last_usage_date: getTodayString(),
-        daily_usage_count: newCount
-      }
-    });
+    if (user) {
+      // Persist to Supabase for logged-in users
+      await supabase.auth.updateUser({
+        data: {
+          last_usage_date: getTodayString(),
+          daily_usage_count: newCount
+        }
+      });
+    } else {
+      // Persist to localStorage for guest users
+      localStorage.setItem('smarttime_ocr_guest_usage', JSON.stringify({
+        date: getTodayString(),
+        count: newCount
+      }));
+    }
   };
 
   const saveSettings = async (id: string) => {
