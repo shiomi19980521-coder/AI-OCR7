@@ -92,10 +92,10 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     }
     console.log("Gemini Service: API Key found (length: " + apiKey.length + ")");
 
+    // User requested to use gemini-1.5-flash
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-1.5-pro for maximum reasoning and vision capability on difficult backgrounds
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-pro",
+      model: "gemini-1.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: timeCardSchema,
@@ -105,35 +105,38 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     const prompt = `
       この勤務表（タイムカード）の画像を解析し、データを抽出してください。
       
-      【重要：背景色による読み飛ばしを禁止】
-      この画像には、**縦に色のついた列（網掛け/背景色あり）**が含まれています（例えば2列目と4列目）。
-      背景色が濃くなっていても、そこには「退勤時間」などの重要な数字が書かれています。
-      **「背景色があるから読み取らない」という判断は絶対にしないでください。**
-      目を凝らして、背景色の上に書かれている黒い数字を必ずすべて読み取ってください。
+      【重要：背景色や薄い文字もすべて読み取ってください】
+      画像の背景色が変化している列（例：緑色の列）や、印字が薄い部分もすべて重要なデータです。
+      「ノイズ」や「汚れ」と判断せず、時刻の形式（H:mm）に見えるものはすべて抽出対象としてください。
+
+      抽出ロジック（思考プロセス）:
+      1. 各行について、時刻形式（例: 9:00, 12:00, 13:50）の数字を左から右へすべてスキャンする。
+      2. 見つかった数字の個数に基づいて、機械的にフィールドへ割り当てる。
       
-      【抽出ルール：左から順にすべて取得】
-      日付行にある「H:mm」形式の数字を、列の色や意味に関係なく、左から右へすべて拾ってください。
+      割り当てルール:
+      【数字が2個見つかった場合】
+      - 1個目 -> startTime1
+      - 2個目 -> endTime1
       
-      割り当て順序:
-      - 1つ目の数字 -> startTime1
-      - 2つ目の数字 -> endTime1 （※ここが網掛け列の可能性があります。必ず拾ってください）
-      - 3つ目の数字 -> startTime2
-      - 4つ目の数字 -> endTime2 （※ここが網掛け列の可能性があります。必ず拾ってください）
+      【数字が4個見つかった場合】
+      - 1個目 -> startTime1
+      - 2個目 -> endTime1
+      - 3個目 -> startTime2
+      - 4個目 -> endTime2
       
-      ※数字が2つしかない行は、1つ目と2つ目をstartTime1, endTime1に入れてください。
+      ※「休憩開始」や「休憩終了」といった区別はせず、とにかく2番目の数字はendTime1、3番目の数字はstartTime2に入れてください。
       
-      【その他の項目】
-      1. 氏名（Name）: カード上部の氏名。
-      
+      出力項目:
+      1. 氏名（Name）
       2. 勤怠データ（Entries）:
-          - 日付 (数字のみ)
-          - 曜日 (1文字)
+          - 日付
+          - 曜日
           - startTime1, endTime1, startTime2, endTime2
           - totalHours: 0 (計算不要)
       
-      重要な注意点:
-      - 画像のコントラストが低くても、推測して読み取ってください。
-      - 空欄の場合は null ではなく空文字 ("") を出力。
+      注意:
+      - 縦線、枠線、背景色は無視。
+      - 空欄箇所は空文字("")。
     `;
     const result = await model.generateContent([
       {
