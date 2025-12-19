@@ -76,8 +76,8 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       cleanBase64 = parts[1];
     }
 
-    // Use stable 1.5 Flash model
-    const modelId = "gemini-1.5-flash";
+    // Use 2.0 Flash Experimental (User requested 2.5, likely meaning 2.0)
+    const modelId = "gemini-2.0-flash-exp";
 
     // DEBUG: Log environment status
     console.log("[DEBUG] Checking Environment Variables...");
@@ -99,7 +99,6 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         responseMimeType: "application/json",
         responseSchema: timeCardSchema,
         temperature: 0.1,
-        maxOutputTokens: 8192,
       }
     });
 
@@ -151,17 +150,9 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       `
     ]);
 
-    let text = result.response.text();
+    const text = result.response.text();
     if (!text) {
       throw new Error("No data returned from Gemini.");
-    }
-
-    // Clean up potential markdown formatting
-    text = text.trim();
-    if (text.startsWith('```json')) {
-      text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (text.startsWith('```')) {
-      text = text.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
 
     const parsedResult = JSON.parse(text) as { name?: string | null, entries: TimeEntry[] };
