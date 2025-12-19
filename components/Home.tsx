@@ -54,7 +54,23 @@ export const Home: React.FC = () => {
   // Define isPremium in component scope to be used in JSX and logic
   const isPremium = user?.isPremium || false;
 
-  const [dailyUsage, setDailyUsage] = useState<number>(0);
+  const [dailyUsage, setDailyUsage] = useState<number>(() => {
+    // Initial load from localStorage for guests to prevent UI flash
+    if (typeof window !== 'undefined') {
+      try {
+        const storedUsage = localStorage.getItem('smarttime_ocr_guest_usage');
+        if (storedUsage) {
+          const { date, count } = JSON.parse(storedUsage);
+          if (date === getTodayString()) {
+            return count;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load initial usage:", e);
+      }
+    }
+    return 0;
+  });
 
   // Load user status on mount and listen for auth changes
   useEffect(() => {
