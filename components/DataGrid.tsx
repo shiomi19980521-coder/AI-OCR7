@@ -47,12 +47,7 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
   };
 
   const getRowTotalMinutes = (row: TimeEntry): number => {
-    // If API provided totalHours, use it (convert hours to minutes for display consistency)
-    if (row.totalHours !== undefined && row.totalHours !== null) {
-      return Math.round(row.totalHours * 60);
-    }
-
-    // Fallback to client-side calculation
+    // Always use client-side calculation for accuracy
     const period1 = calculateDurationMinutes(row.startTime1, row.endTime1);
     const period2 = calculateDurationMinutes(row.startTime2, row.endTime2);
     return period1 + period2;
