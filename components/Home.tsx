@@ -737,7 +737,7 @@ export const Home: React.FC = () => {
                 <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 font-semibold text-slate-700">料金</td>
                   <td className="px-6 py-4 text-center text-slate-600">0円</td>
-                  <td className="px-6 py-4 text-center font-bold text-indigo-600 bg-indigo-50/50">月額1,480円（税込）</td>
+                  <td className="px-6 py-4 text-center font-bold text-indigo-600 bg-indigo-50/50">月額880円（税込）</td>
                 </tr>
                 <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 font-semibold text-slate-700">会員登録</td>

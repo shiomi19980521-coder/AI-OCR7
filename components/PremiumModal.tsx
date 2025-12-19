@@ -50,7 +50,7 @@ export const PremiumModal: React.FC<PremiumModalProps> = ({ isOpen, onClose, onU
                 <tr>
                   <td className="p-4 font-bold text-slate-700 bg-slate-50/30">料金</td>
                   <td className="p-4 text-center text-slate-600">0円</td>
-                  <td className="p-4 text-center font-bold text-indigo-600 bg-indigo-50/30">月額1480円（税込）</td>
+                  <td className="p-4 text-center font-bold text-indigo-600 bg-indigo-50/30">月額880円（税込）</td>
                 </tr>
                 <tr>
                   <td className="p-4 font-bold text-slate-700 bg-slate-50/30">会員登録</td>

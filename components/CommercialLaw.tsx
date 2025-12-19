@@ -53,7 +53,7 @@ export const CommercialLaw: React.FC = () => {
                         <section className="mb-8">
                             <h2 className="text-xl font-bold text-slate-900 mb-4">販売価格</h2>
                             <p className="text-slate-700 leading-relaxed">
-                                有料会員プラン: 月額1,480円（税込）
+                                有料会員プラン: 月額880円（税込）
                             </p>
                         </section>
 
