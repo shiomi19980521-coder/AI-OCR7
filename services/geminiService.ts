@@ -112,27 +112,41 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       `
         この勤務表（タイムカード）の画像を解析し、データを抽出してください。
         
-        【抽出ルール: 単純な左詰め】
-        各日付行にある「時刻データ（数字）」を左から右へ順番に拾ってください。横の位置や列の幅は考慮しなくて構いません。
+        以下の情報を抽出してください：
+        1. 氏名（Name）: カード上部に記載されている氏名を探してください。見つからない場合はnullにしてください。
         
-        検出された数字の個数に応じて、以下のように割り当ててください：
+        2. 勤怠データ（Entries）:
+            - 日付 (数字のみ抽出)
+            - 曜日 (日本語の曜日一文字)
+            - 時刻データの抽出ルール（【重要】左から右へ順番に割り当ててください）:
+              
+              画像の日付行にある「時刻のような数字（H:mm）」をすべて拾ってください。
+              
+              【パターンA: 数字が2つある場合】
+              1つ目 → startTime1 (出勤)
+              2つ目 → endTime1 (退勤)
+              (startTime2, endTime2 は空文字)
+              
+              【パターンB: 数字が4つある場合】
+              1つ目 → startTime1 (出勤)
+              2つ目 → endTime1 (休憩開始/退勤)
+              3つ目 → startTime2 (休憩終了/再出勤)
+              4つ目 → endTime2 (退勤)
+              
+              ※数字の間隔や配置位置に関わらず、とにかく「左から何番目にあるか」だけで判定してください。
+              ※「12:00」や「13:00」なども休憩ではなく「時刻」として扱って上記の順に割り当ててください。
+              
+            - 合計時間（totalHours）:
+              * 1日の総労働時間を計算してください
+              * 計算例 (パターンB): (2つ目 - 1つ目) + (4つ目 - 3つ目)
+              * 例: 9:00, 12:00, 13:00, 18:00 の場合
+                (12:00-9:00 = 3h) + (18:00-13:00 = 5h) = 8.0時間
+              * 時刻データがない場合は 0 を出力してください
         
-        【パターンA: 数字が2つある場合】
-        1つ目 → startTime1 (出勤)
-        2つ目 → endTime1 (退勤)
-        (startTime2, endTime2 は空文字)
-        
-        【パターンB: 数字が4つある場合】
-        1つ目 → startTime1 (出勤)
-        2つ目 → endTime1 (休憩開始)
-        3つ目 → startTime2 (休憩終了)
-        4つ目 → endTime2 (退勤)
-        
-        【重要】
-        - 縦線や列の概念は無視して、とにかく「左から順に」割り当ててください。
-        - 数字が3つなどイレギュラーな場合は、ある分だけ順番に埋めてください。
-        - 0や空欄は無視して、印字されている数字だけを拾ってください。
-        - 合計時間（totalHours）はAI側では計算不要です（0で返してください）。
+        重要な注意点:
+        - 縦線や枠線は無視して、行にある数字を左から順に拾ってください。
+        - 時間が空欄の場合は、nullではなく空文字("")を出力してください
+        - 合計時間は必ず数値（小数点形式）で計算して出力してください
       `
     ]);
 
@@ -151,45 +165,17 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       return String(val);
     };
 
-    // --- Time Calculation Logic (Moved from Layout to Code) ---
-    const calculateDurationMinutes = (start: string, end: string): number => {
-      if (!start || !end) return 0;
-      try {
-        const [sH, sM] = start.split(':').map(Number);
-        const [eH, eM] = end.split(':').map(Number);
-        if (isNaN(sH) || isNaN(eH)) return 0;
-
-        const startMin = sH * 60 + (sM || 0);
-        const endMin = eH * 60 + (eM || 0);
-        return Math.max(0, endMin - startMin);
-      } catch {
-        return 0;
-      }
-    };
-
-    // Post-processing: Ensure no nulls, sort, fill gaps, and CALCULATE TOTALS
+    // Post-processing: Ensure no nulls, sort, and fill gaps
     data = data
       .filter(d => d.dayInt !== null && d.dayInt !== undefined)
       .sort((a, b) => (a.dayInt || 0) - (b.dayInt || 0))
-      .map(d => {
-        const entry = {
-          ...d,
-          startTime1: cleanStr(d.startTime1),
-          endTime1: cleanStr(d.endTime1),
-          startTime2: cleanStr(d.startTime2),
-          endTime2: cleanStr(d.endTime2),
-        };
-
-        // Calculate Total Hours reliably in Code
-        const period1 = calculateDurationMinutes(entry.startTime1, entry.endTime1);
-        const period2 = calculateDurationMinutes(entry.startTime2, entry.endTime2);
-        const totalMinutes = period1 + period2;
-
-        // Store as hours (e.g. 7.5) for DataGrid to use formatted display
-        entry.totalHours = totalMinutes / 60;
-
-        return entry;
-      });
+      .map(d => ({
+        ...d,
+        startTime1: cleanStr(d.startTime1),
+        endTime1: cleanStr(d.endTime1),
+        startTime2: cleanStr(d.startTime2),
+        endTime2: cleanStr(d.endTime2),
+      }));
 
     if (data.length > 0) {
       const filledData: TimeEntry[] = [];
@@ -228,7 +214,6 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
             endTime1: '',
             startTime2: '',
             endTime2: '',
-            totalHours: 0
           };
         } else if (!entry.dayOfWeek && calculatedDow) {
           entry.dayOfWeek = calculatedDow;
