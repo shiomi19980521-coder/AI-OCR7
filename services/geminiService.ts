@@ -76,8 +76,8 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       cleanBase64 = parts[1];
     }
 
-    // Use 2.0 Flash Experimental (User requested 2.5, likely meaning 2.0)
-    const modelId = "gemini-2.0-flash-exp";
+    // Use stable 1.5 Flash model
+    const modelId = "gemini-1.5-flash";
 
     // DEBUG: Log environment status
     console.log("[DEBUG] Checking Environment Variables...");
@@ -98,41 +98,10 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: timeCardSchema,
-      },
+        temperature: 0.1,
+      }
     });
 
-    const prompt = `
-      この勤務表（タイムカード）の画像を解析し、データを抽出してください。
-      
-      【最優先ルール：位置による機械的な抽出】
-      画像の「日付行」にある「時刻形式の数字（H:mm）」を、**意味や列のタイトルを無視して**、左から見つかった順にそのまま格納してください。
-      
-      抽出ステップ:
-      1. 行にあるすべての時刻（例: 9:00, 12:00, 13:00, 18:00）を左から右へ読み取る。
-      2. 見つかった順に以下のフィールドへ埋める。
-      
-      - 1番目に見つかった時刻 -> startTime1
-      - 2番目に見つかった時刻 -> endTime1
-      - 3番目に見つかった時刻 -> startTime2
-      - 4番目に見つかった時刻 -> endTime2
-      
-      ※「12:00」や「13:00」などが休憩時間に見えても、それは「2番目の数字」「3番目の数字」として扱ってください。
-      ※数字が2つしかない行は、startTime1とendTime1のみ埋めてください。
-      
-      【その他の抽出項目】
-      1. 氏名（Name）: カード上部の氏名。
-      
-      2. 勤怠データ（Entries）:
-          - 日付 (数字のみ)
-          - 曜日 (1文字)
-          - startTime1, endTime1, startTime2, endTime2 (上記のルールに従う)
-          - totalHours: 
-             *計算不要 (0を入れてください)*。クライアント側で計算します。
-      
-      重要な注意点:
-      - 縦線や背景色は無視してください。
-      - 空欄の場合は null ではなく空文字 ("") を出力。
-    `;
     const result = await model.generateContent([
       {
         inlineData: {
@@ -140,7 +109,45 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
           data: cleanBase64
         }
       },
-      prompt
+      `
+        この勤務表（タイムカード）の画像を解析し、データを抽出してください。
+        
+        以下の情報を抽出してください：
+        1. 氏名（Name）: カード上部に記載されている氏名を探してください。見つからない場合はnullにしてください。
+        
+        2. 勤怠データ（Entries）:
+            - 日付 (数字のみ抽出)
+            - 曜日 (日本語の曜日一文字)
+            - 時刻データの抽出ルール（【重要】左から右へ順番に割り当ててください）:
+              
+              画像の日付行にある「時刻のような数字（H:mm）」をすべて拾ってください。
+              
+              【パターンA: 数字が2つある場合】
+              1つ目 → startTime1 (出勤)
+              2つ目 → endTime1 (退勤)
+              (startTime2, endTime2 は空文字)
+              
+              【パターンB: 数字が4つある場合】
+              1つ目 → startTime1 (出勤)
+              2つ目 → endTime1 (休憩開始/退勤)
+              3つ目 → startTime2 (休憩終了/再出勤)
+              4つ目 → endTime2 (退勤)
+              
+              ※数字の間隔や配置位置に関わらず、とにかく「左から何番目にあるか」だけで判定してください。
+              ※「12:00」や「13:00」なども休憩ではなく「時刻」として扱って上記の順に割り当ててください。
+              
+            - 合計時間（totalHours）:
+              * 1日の総労働時間を計算してください
+              * 計算例 (パターンB): (2つ目 - 1つ目) + (4つ目 - 3つ目)
+              * 例: 9:00, 12:00, 13:00, 18:00 の場合
+                (12:00-9:00 = 3h) + (18:00-13:00 = 5h) = 8.0時間
+              * 時刻データがない場合は 0 を出力してください
+        
+        重要な注意点:
+        - 縦線や枠線は無視して、行にある数字を左から順に拾ってください。
+        - 時間が空欄の場合は、nullではなく空文字("")を出力してください
+        - 合計時間は必ず数値（小数点形式）で計算して出力してください
+      `
     ]);
 
     const text = result.response.text();
