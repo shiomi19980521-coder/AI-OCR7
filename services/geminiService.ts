@@ -102,77 +102,75 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       }
     });
 
+    const prompt = `
+        この勤務表（タイムカード）の画像を解析し、データを抽出してください。
+        
+        【抽出ルール：左詰め厳守】
+        画像内の各行にある「時刻データ（HH:mm）」の個数に応じて、以下のルールで抽出してください。
+        
+        **パターンA：時刻が2つある場合**
+        必ず「開始1」と「終了1」に入れてください。
+        例画像: [9:00] [18:00]
+        抽出: startTime1: "9:00", endTime1: "18:00", startTime2: "", endTime2: ""
+        
+        **パターンB：時刻が4つある場合**
+        左から順に「開始1」「終了1」「開始2」「終了2」に入れてください。
+        例画像: [9:00] [12:00] [13:00] [18:00]
+        抽出: startTime1: "9:00", endTime1: "12:00", startTime2: "13:00", endTime2: "18:00"
+
+        **重要な注意点:**
+        - 「列の位置」や「空白」は気にしないでください。
+        - 単純に見つかった時刻を左から順に埋めてください。
+        - 3つだけある等の不正な場合は、左から埋めて残りは空文字にしてください。
+
+        【出力フォーマット】
+        JSON形式のみ出力してください。
+        \`\`\`json
+        {
+          "name": "氏名",
+          "entries": [
+            {
+              "dayInt": 1,
+              "date": "1日",
+              "dayOfWeek": "月",
+              "startTime1": "9:00",
+              "endTime1": "18:00",
+              "startTime2": "",
+              "endTime2": "",
+              "totalHours": 0
+            }
+          ]
+        }
+        \`\`\`
+      `;
+
     const result = await model.generateContent([
+      prompt,
       {
         inlineData: {
+          data: cleanBase64,
           mimeType: mimeType,
-          data: cleanBase64
-        }
+        },
       },
-      `
-        この勤務表（タイムカード）の画像を「Excelのようなグリッド（表）」として視覚的に認識し、そのままデータを抽出してください。
-        
-        【全体構造の認識】
-        画像は「横長の日付行」が縦に並んでいる表です。
-        各行は基本的に以下の5つの列（グリッド）で構成されています：
-        
-        [列1: 日付] | [列2: 開始1] | [列3: 終了1] | [列4: 開始2] | [列5: 終了2]
-        
-        【重要：列の判断基準】
-        画像を見て、**縦の列の位置関係**を厳密に守ってください。
-        
-        ★基本ルール（最優先）：
-        行の中に「時刻が4つ」ある場合は、空白があっても無視して、必ず左から順に [Start1] [End1] [Start2] [End2] を全て埋めてください。
-        例: "9:25 12:00 14:23 18:14" → Start1:9:25, End1:12:00, Start2:14:23, End2:18:14
-        
-        ★特有のパターン（例外）：
-        時刻が2つだけで、かつ中間に**明白な広い空白**がある場合のみ、位置を飛ばしてください。
-        例: [8:55] [    ] [    ] [17:05]
-        この場合、「17:05」は2番目の数字ですが、右端の「終了2」の列にあるため、必ず endTime2 として抽出してください。
-                3. **具体例**
-           画像: [16水] [9:25] [     ] [     ] [13:50]
-           抽出結果: 
-             startTime1: "9:25"
-             endTime1: ""
-             startTime2: ""
-             endTime2: "13:50"
-             totalHours: 4.42 (13:50-9:25 = 4h25m)
-             
-           画像: [17木] [9:20] [12:00] [13:00] [17:00]
-           抽出結果:
-             startTime1: "9:20"
-             endTime1: "12:00"
-             startTime2: "13:00"
-             endTime2: "17:00"
-             totalHours: 6.67 (2h40m + 4h = 6h40m)
-
-        【抽出ルール】
-        1. **見た目通りの位置を維持してください**
-           - 表の「マス目」を意識してください。
-           - ヘッダー（「入」「退」「入/時数」「退」など）があれば、それに従ってください。
-           
-        2. **列の定義**
-           - **列1 (Date)**: 日付と曜日
-           - **列2 (Start1)**: 出勤
-           - **列3 (End1)**: 退勤（または休憩開始）
-           - **列4 (Start2)**: 再出勤（または休憩終了）
-           - **列5 (End2)**: 最終退勤
-           
-        3. **合計時間（totalHours）の計算ルール**
-           - 基本式: (endTime1 - startTime1) + (endTime2 - startTime2)
-           - **例外パターン**: endTime1 と startTime2 が空で、endTime2 だけがある場合（例：8:55 ... 17:05）
-             -> 計算式: endTime2 - startTime1 で計算してください。
-      `
     ]);
 
-    const text = result.response.text();
-    if (!text) {
-      throw new Error("No data returned from Gemini.");
+    const response = await result.response;
+    const text = response.text();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("JSON format not found in response");
     }
 
-    const parsedResult = JSON.parse(text) as { name?: string | null, entries: TimeEntry[] };
-    let data = parsedResult.entries || [];
-    const detectedName = parsedResult.name || "";
+    const parsedData = JSON.parse(jsonMatch[0]);
+
+    // Validate schema
+    if (!parsedData.entries || !Array.isArray(parsedData.entries)) {
+      throw new Error("Invalid schema: 'entries' array is missing");
+    }
+
+    const detectedName = parsedData.name || "";
+    let data: TimeEntry[] = parsedData.entries;
 
     // Helper to clean 'null' strings or null values
     const cleanStr = (val: any) => {
@@ -244,9 +242,11 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
             entry.dayOfWeek = calculatedDow;
           }
 
-          // STRICT CALCULATION LOGIC (Overwriting AI's totalHours)
-          // Rule 1: If endTime2 exists but (endTime1 & startTime2) are empty -> Calculate endTime2 - startTime1
-          // Rule 2: Otherwise -> (endTime1 - startTime1) + (endTime2 - startTime2)
+          // STRICT CALCULATION LOGIC (Standard Left-to-Right)
+          // Just sum up the durations based on what is present.
+          // Since we enforce left-alignment:
+          // 2 items -> S1, E1
+          // 4 items -> S1, E1, S2, E2
 
           const s1 = parseToMinutes(entry.startTime1);
           const e1 = parseToMinutes(entry.endTime1);
@@ -255,21 +255,15 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
 
           let totalMinutes = 0;
 
-          // Checks for strict column logic pattern: [S1] [ ] [ ] [E2]
           const hasS1 = !!entry.startTime1;
           const hasE1 = !!entry.endTime1;
           const hasS2 = !!entry.startTime2;
           const hasE2 = !!entry.endTime2;
 
-          if (hasS1 && !hasE1 && !hasS2 && hasE2) {
-            // Exception Pattern: 8:55 ... ... 17:05
-            totalMinutes = Math.max(0, e2 - s1);
-          } else {
-            // Standard Pattern
-            const p1 = (hasS1 && hasE1) ? Math.max(0, e1 - s1) : 0;
-            const p2 = (hasS2 && hasE2) ? Math.max(0, e2 - s2) : 0;
-            totalMinutes = p1 + p2;
-          }
+          // Simple standard calculation
+          const p1 = (hasS1 && hasE1) ? Math.max(0, e1 - s1) : 0;
+          const p2 = (hasS2 && hasE2) ? Math.max(0, e2 - s2) : 0;
+          totalMinutes = p1 + p2;
 
           // Round to 2 decimal places for hours
           entry.totalHours = Math.round((totalMinutes / 60) * 100) / 100;
