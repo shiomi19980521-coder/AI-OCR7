@@ -93,8 +93,9 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     console.log("Gemini Service: API Key found (length: " + apiKey.length + ")");
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    // Use gemini-1.5-pro for maximum reasoning and vision capability on difficult backgrounds
     const model = genAI.getGenerativeModel({
-      model: modelId,
+      model: "gemini-1.5-pro",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: timeCardSchema,
@@ -104,33 +105,34 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
     const prompt = `
       この勤務表（タイムカード）の画像を解析し、データを抽出してください。
       
-      【最優先ルール：位置による機械的な抽出】
-      画像の「日付行」にある「時刻形式の数字（H:mm）」を、**意味や列のタイトルを無視して**、左から見つかった順にそのまま格納してください。
+      【重要：背景色による読み飛ばしを禁止】
+      この画像には、**縦に色のついた列（網掛け/背景色あり）**が含まれています（例えば2列目と4列目）。
+      背景色が濃くなっていても、そこには「退勤時間」などの重要な数字が書かれています。
+      **「背景色があるから読み取らない」という判断は絶対にしないでください。**
+      目を凝らして、背景色の上に書かれている黒い数字を必ずすべて読み取ってください。
       
-      抽出ステップ:
-      1. 行にあるすべての時刻（例: 9:00, 12:00, 13:00, 18:00）を左から右へ読み取る。
-      2. 見つかった順に以下のフィールドへ埋める。
+      【抽出ルール：左から順にすべて取得】
+      日付行にある「H:mm」形式の数字を、列の色や意味に関係なく、左から右へすべて拾ってください。
       
-      - 1番目に見つかった時刻 -> startTime1
-      - 2番目に見つかった時刻 -> endTime1
-      - 3番目に見つかった時刻 -> startTime2
-      - 4番目に見つかった時刻 -> endTime2
+      割り当て順序:
+      - 1つ目の数字 -> startTime1
+      - 2つ目の数字 -> endTime1 （※ここが網掛け列の可能性があります。必ず拾ってください）
+      - 3つ目の数字 -> startTime2
+      - 4つ目の数字 -> endTime2 （※ここが網掛け列の可能性があります。必ず拾ってください）
       
-      ※「12:00」や「13:00」などが休憩時間に見えても、それは「2番目の数字」「3番目の数字」として扱ってください。
-      ※数字が2つしかない行は、startTime1とendTime1のみ埋めてください。
+      ※数字が2つしかない行は、1つ目と2つ目をstartTime1, endTime1に入れてください。
       
-      【その他の抽出項目】
+      【その他の項目】
       1. 氏名（Name）: カード上部の氏名。
       
       2. 勤怠データ（Entries）:
           - 日付 (数字のみ)
           - 曜日 (1文字)
-          - startTime1, endTime1, startTime2, endTime2 (上記のルールに従う)
-          - totalHours: 
-             *計算不要 (0を入れてください)*。クライアント側で計算します。
+          - startTime1, endTime1, startTime2, endTime2
+          - totalHours: 0 (計算不要)
       
       重要な注意点:
-      - 縦線や背景色は無視してください。
+      - 画像のコントラストが低くても、推測して読み取ってください。
       - 空欄の場合は null ではなく空文字 ("") を出力。
     `;
     const result = await model.generateContent([
