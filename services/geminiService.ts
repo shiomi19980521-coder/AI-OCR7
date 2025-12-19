@@ -32,19 +32,19 @@ const timeCardSchema: Schema = {
           },
           startTime1: {
             type: SchemaType.STRING,
-            description: "The 1st time string found in the row (regardless of column meaning).",
+            description: "First period clock-in time in HH:mm format (24-hour).",
           },
           endTime1: {
             type: SchemaType.STRING,
-            description: "The 2nd time string found in the row. If none, empty string.",
+            description: "First period clock-out time in HH:mm format (24-hour).",
           },
           startTime2: {
             type: SchemaType.STRING,
-            description: "The 3rd time string found in the row. If none, empty string.",
+            description: "Second period clock-in time in HH:mm format (24-hour). If empty, return empty string.",
           },
           endTime2: {
             type: SchemaType.STRING,
-            description: "The 4th time string found in the row. If none, empty string.",
+            description: "Second period clock-out time in HH:mm format (24-hour). If empty, return empty string.",
           },
           totalHours: {
             type: SchemaType.NUMBER,
@@ -98,10 +98,41 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: timeCardSchema,
-        temperature: 0.1,
-      }
+      },
     });
 
+    const prompt = `
+      この勤務表（タイムカード）の画像を解析し、データを抽出してください。
+      
+      【最優先ルール：位置による機械的な抽出】
+      画像の「日付行」にある「時刻形式の数字（H:mm）」を、**意味や列のタイトルを無視して**、左から見つかった順にそのまま格納してください。
+      
+      抽出ステップ:
+      1. 行にあるすべての時刻（例: 9:00, 12:00, 13:00, 18:00）を左から右へ読み取る。
+      2. 見つかった順に以下のフィールドへ埋める。
+      
+      - 1番目に見つかった時刻 -> startTime1
+      - 2番目に見つかった時刻 -> endTime1
+      - 3番目に見つかった時刻 -> startTime2
+      - 4番目に見つかった時刻 -> endTime2
+      
+      ※「12:00」や「13:00」などが休憩時間に見えても、それは「2番目の数字」「3番目の数字」として扱ってください。
+      ※数字が2つしかない行は、startTime1とendTime1のみ埋めてください。
+      
+      【その他の抽出項目】
+      1. 氏名（Name）: カード上部の氏名。
+      
+      2. 勤怠データ（Entries）:
+          - 日付 (数字のみ)
+          - 曜日 (1文字)
+          - startTime1, endTime1, startTime2, endTime2 (上記のルールに従う)
+          - totalHours: 
+             *計算不要 (0を入れてください)*。クライアント側で計算します。
+      
+      重要な注意点:
+      - 縦線や背景色は無視してください。
+      - 空欄の場合は null ではなく空文字 ("") を出力。
+    `;
     const result = await model.generateContent([
       {
         inlineData: {
@@ -109,35 +140,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
           data: cleanBase64
         }
       },
-      `
-        この勤務表（タイムカード）の画像を解析し、データを抽出してください。
-        
-        以下の情報を抽出してください：
-        1. 氏名（Name）: カード上部に記載されている氏名を探してください。見つからない場合はnullにしてください。
-        
-        2. 勤怠データ（Entries）:
-            - 日付 (数字のみ抽出)
-            - 曜日 (日本語の曜日一文字)
-            - 時刻データの抽出ルール（シンプルに左から順に抽出）:
-              
-              画像の日付行にある「時間を表す数字（H:mm）」を、左から順番にそのまま抽出してください。
-              余計な判断や除外（合計時間の除外など）は一切行わず、見えた数字をそのままフィールドに埋めてください。
-
-              1つ目の数字 → startTime1
-              2つ目の数字 → endTime1
-              3つ目の数字 → startTime2
-              4つ目の数字 → endTime2
-              
-              ※もし3つしか数字がない場合は、3つ目まで埋めてください（startTime2に入る）。
-              ※もし5つ以上ある場合は、最初の4つだけを抽出してください。
-              
-            - 合計時間（totalHours）:
-               (退勤1 - 出勤1) + (退勤2 - 出勤2) で計算してください。
-        
-        重要な注意点:
-        - 縦線や枠線は無視して、行にある数字を左から順に拾ってください。
-        - 時間が空欄の場合は、nullではなく空文字("")を出力してください。
-      `
+      prompt
     ]);
 
     const text = result.response.text();
@@ -198,7 +201,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
           // Create gap entry with empty strings (not null)
           entry = {
             dayInt: currentDay,
-            date: `${currentDay} `,
+            date: `${currentDay}`,
             dayOfWeek: calculatedDow,
             startTime1: '',
             endTime1: '',
@@ -213,7 +216,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         const displayDate = entry.date.replace(/[^0-9]/g, '');
         const displayDow = (entry.dayOfWeek || '').replace(/[()]/g, '');
 
-        entry.date = displayDow ? `${displayDate}${displayDow} ` : `${displayDate} `;
+        entry.date = displayDow ? `${displayDate}${displayDow}` : `${displayDate}`;
 
         filledData.push(entry);
         currentDay++;
