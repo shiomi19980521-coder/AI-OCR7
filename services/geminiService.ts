@@ -182,17 +182,33 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       const startDay = data[0].dayInt || 1;
       const lastDay = data[data.length - 1].dayInt || 31;
 
-      // Try to determine the weekday offset
-      let firstValidDayEntry = data.find(d => d.dayOfWeek && WEEKDAYS.includes(d.dayOfWeek.replace(/[()]/g, '')));
-      let weekdayOffset = -1;
+      // Improved Logic: Determine the correct weekday offset by voting
+      // This handles cases where AI misreads one or two days (e.g. two Tuesdays in a row)
+      const offsetVotes: { [key: number]: number } = {};
 
-      if (firstValidDayEntry && firstValidDayEntry.dayInt) {
-        const cleanDow = firstValidDayEntry.dayOfWeek.replace(/[()]/g, '');
-        const dowIndex = WEEKDAYS.indexOf(cleanDow);
-        if (dowIndex !== -1) {
-          weekdayOffset = (dowIndex - (firstValidDayEntry.dayInt % 7) + 7) % 7;
+      data.forEach(d => {
+        if (d.dayInt && d.dayOfWeek) {
+          const cleanDow = d.dayOfWeek.replace(/[()]/g, '');
+          const dowIndex = WEEKDAYS.indexOf(cleanDow);
+          if (dowIndex !== -1) {
+            // Calculate what the offset would be based on this entry
+            // limit to 0-6
+            const offset = (dowIndex - (d.dayInt % 7) + 7) % 7;
+            offsetVotes[offset] = (offsetVotes[offset] || 0) + 1;
+          }
         }
-      }
+      });
+
+      // Find the offset with the most votes
+      let weekdayOffset = -1;
+      let maxVotes = 0;
+
+      Object.entries(offsetVotes).forEach(([off, count]) => {
+        if (count > maxVotes) {
+          maxVotes = count;
+          weekdayOffset = Number(off);
+        }
+      });
 
       let currentDay = startDay;
 
@@ -205,7 +221,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         }
 
         if (!entry) {
-          // Create gap entry with empty strings (not null)
+          // Create gap entry
           entry = {
             dayInt: currentDay,
             date: `${currentDay}`,
@@ -214,8 +230,11 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
             endTime1: '',
             startTime2: '',
             endTime2: '',
+            totalHours: 0
           };
-        } else if (!entry.dayOfWeek && calculatedDow) {
+        } else if (calculatedDow) {
+          // Force overwrite the day of week with the calculated correct one
+          // This fixes OCR errors like "Tue, Tue" -> "Tue, Wed"
           entry.dayOfWeek = calculatedDow;
         }
 
