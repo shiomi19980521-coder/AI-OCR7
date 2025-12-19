@@ -23,6 +23,7 @@ export const DataGrid: React.FC<DataGridProps> = ({ data: initialData, detectedN
     setData(newData);
   };
 
+  // Calculate duration in minutes between two "HH:MM" strings
   const calculateDurationMinutes = (start: string, end: string): number => {
     if (!start || !end) return 0;
     try {
