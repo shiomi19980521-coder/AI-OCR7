@@ -102,75 +102,63 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       }
     });
 
-    const prompt = `
-        この勤務表（タイムカード）の画像を解析し、データを抽出してください。
-        
-        【抽出ルール：左詰め厳守】
-        画像内の各行にある「時刻データ（HH:mm）」の個数に応じて、以下のルールで抽出してください。
-        
-        **パターンA：時刻が2つある場合**
-        必ず「開始1」と「終了1」に入れてください。
-        例画像: [9:00] [18:00]
-        抽出: startTime1: "9:00", endTime1: "18:00", startTime2: "", endTime2: ""
-        
-        **パターンB：時刻が4つある場合**
-        左から順に「開始1」「終了1」「開始2」「終了2」に入れてください。
-        例画像: [9:00] [12:00] [13:00] [18:00]
-        抽出: startTime1: "9:00", endTime1: "12:00", startTime2: "13:00", endTime2: "18:00"
-
-        **重要な注意点:**
-        - 「列の位置」や「空白」は気にしないでください。
-        - 単純に見つかった時刻を左から順に埋めてください。
-        - 3つだけある等の不正な場合は、左から埋めて残りは空文字にしてください。
-
-        【出力フォーマット】
-        JSON形式のみ出力してください。
-        \`\`\`json
-        {
-          "name": "氏名",
-          "entries": [
-            {
-              "dayInt": 1,
-              "date": "1日",
-              "dayOfWeek": "月",
-              "startTime1": "9:00",
-              "endTime1": "18:00",
-              "startTime2": "",
-              "endTime2": "",
-              "totalHours": 0
-            }
-          ]
-        }
-        \`\`\`
-      `;
-
     const result = await model.generateContent([
-      prompt,
       {
         inlineData: {
-          data: cleanBase64,
           mimeType: mimeType,
-        },
+          data: cleanBase64
+        }
       },
+      `
+        この勤務表（タイムカード）の画像を解析し、データを抽出してください。
+        
+        【抽出ルール: 絶対左詰め】
+        画像の「列の位置」や「空白」は一切考慮しないでください。
+        **行にある「時刻データ（H:mm）」を左から順番に拾い、単純に詰めて割り当ててください。**
+        
+        ■ パターンA: 数字が2つある場合
+        1つ目 → Start1 (開始1)
+        2つ目 → End1   (終了1)
+        (Start2, End2 は空文字)
+        
+        ■ パターンB: 数字が4つある場合
+        1つ目 → Start1 (開始1)
+        2つ目 → End1   (終了1)
+        3つ目 → Start2 (開始2)
+        4つ目 → End2   (終了2)
+        
+        ■ パターンC: 数字が1つや3つなどの場合
+        左から順に Start1, End1, Start2... と埋めていき、余った項目は空文字にしてください。
+        
+        【除外対象】
+        時間を表さない数字（工数、時数など）が右端にあっても、それは無視してください。
+        あくまで「出勤/退勤」のペアとなりうる時刻データのみを対象としてください。
+
+        【合計時間の計算 (totalHours)】
+        抽出結果に基づいて計算してください。
+        - 2つの場合: End1 - Start1
+        - 4つの場合: (End1 - Start1) + (End2 - Start2)
+        ※正確に計算してください。
+        
+        【出力データ定義】
+           - **date**: 日付 (数字のみ)
+           - **dayOfWeek**: 曜日
+           - **startTime1**: 1番目の時刻
+           - **endTime1**: 2番目の時刻
+           - **startTime2**: 3番目の時刻
+           - **endTime2**: 4番目の時刻
+           - **totalHours**: 計算結果（数値）
+      `
     ]);
 
-    const response = await result.response;
-    const text = response.text();
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("JSON format not found in response");
+    const text = result.response.text();
+    if (!text) {
+      throw new Error("No data returned from Gemini.");
     }
 
-    const parsedData = JSON.parse(jsonMatch[0]);
-
-    // Validate schema
-    if (!parsedData.entries || !Array.isArray(parsedData.entries)) {
-      throw new Error("Invalid schema: 'entries' array is missing");
-    }
-
-    const detectedName = parsedData.name || "";
-    let data: TimeEntry[] = parsedData.entries;
+    const parsedResult = JSON.parse(text) as { name?: string | null, entries: TimeEntry[] };
+    let data = parsedResult.entries || [];
+    const detectedName = parsedResult.name || "";
 
     // Helper to clean 'null' strings or null values
     const cleanStr = (val: any) => {
@@ -207,14 +195,6 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         }
       }
 
-      // Helper to parse "HH:mm" to minutes
-      const parseToMinutes = (timeStr: string): number => {
-        if (!timeStr) return 0;
-        const [h, m] = timeStr.split(':').map(Number);
-        if (isNaN(h) || isNaN(m)) return 0;
-        return h * 60 + m;
-      };
-
       let currentDay = startDay;
 
       while (currentDay <= lastDay) {
@@ -226,7 +206,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         }
 
         if (!entry) {
-          // Create gap entry with empty strings
+          // Create gap entry with empty strings (not null)
           entry = {
             dayInt: currentDay,
             date: `${currentDay}`,
@@ -235,38 +215,9 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
             endTime1: '',
             startTime2: '',
             endTime2: '',
-            totalHours: 0
           };
-        } else {
-          if (!entry.dayOfWeek && calculatedDow) {
-            entry.dayOfWeek = calculatedDow;
-          }
-
-          // STRICT CALCULATION LOGIC (Standard Left-to-Right)
-          // Just sum up the durations based on what is present.
-          // Since we enforce left-alignment:
-          // 2 items -> S1, E1
-          // 4 items -> S1, E1, S2, E2
-
-          const s1 = parseToMinutes(entry.startTime1);
-          const e1 = parseToMinutes(entry.endTime1);
-          const s2 = parseToMinutes(entry.startTime2);
-          const e2 = parseToMinutes(entry.endTime2);
-
-          let totalMinutes = 0;
-
-          const hasS1 = !!entry.startTime1;
-          const hasE1 = !!entry.endTime1;
-          const hasS2 = !!entry.startTime2;
-          const hasE2 = !!entry.endTime2;
-
-          // Simple standard calculation
-          const p1 = (hasS1 && hasE1) ? Math.max(0, e1 - s1) : 0;
-          const p2 = (hasS2 && hasE2) ? Math.max(0, e2 - s2) : 0;
-          totalMinutes = p1 + p2;
-
-          // Round to 2 decimal places for hours
-          entry.totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+        } else if (!entry.dayOfWeek && calculatedDow) {
+          entry.dayOfWeek = calculatedDow;
         }
 
         // Format the date string to be "20土" style
