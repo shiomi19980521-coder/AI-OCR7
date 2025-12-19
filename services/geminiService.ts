@@ -32,19 +32,19 @@ const timeCardSchema: Schema = {
           },
           startTime1: {
             type: SchemaType.STRING,
-            description: "First period clock-in time in HH:mm format (24-hour).",
+            description: "The 1st time string found in the row (regardless of column meaning).",
           },
           endTime1: {
             type: SchemaType.STRING,
-            description: "First period clock-out time in HH:mm format (24-hour).",
+            description: "The 2nd time string found in the row. If none, empty string.",
           },
           startTime2: {
             type: SchemaType.STRING,
-            description: "Second period clock-in time in HH:mm format (24-hour). If empty, return empty string.",
+            description: "The 3rd time string found in the row. If none, empty string.",
           },
           endTime2: {
             type: SchemaType.STRING,
-            description: "Second period clock-out time in HH:mm format (24-hour). If empty, return empty string.",
+            description: "The 4th time string found in the row. If none, empty string.",
           },
           totalHours: {
             type: SchemaType.NUMBER,
