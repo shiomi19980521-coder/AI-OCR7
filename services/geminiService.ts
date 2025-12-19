@@ -99,6 +99,7 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
         responseMimeType: "application/json",
         responseSchema: timeCardSchema,
         temperature: 0.1,
+        maxOutputTokens: 8192,
       }
     });
 
@@ -150,9 +151,17 @@ export const analyzeTimeCardImage = async (base64Image: string): Promise<{ entri
       `
     ]);
 
-    const text = result.response.text();
+    let text = result.response.text();
     if (!text) {
       throw new Error("No data returned from Gemini.");
+    }
+
+    // Clean up potential markdown formatting
+    text = text.trim();
+    if (text.startsWith('```json')) {
+      text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (text.startsWith('```')) {
+      text = text.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
 
     const parsedResult = JSON.parse(text) as { name?: string | null, entries: TimeEntry[] };
