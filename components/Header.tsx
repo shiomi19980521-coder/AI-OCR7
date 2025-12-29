@@ -21,8 +21,8 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="w-full bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-2 rounded-xl shadow-lg shadow-indigo-200">
-            <ScanLine className="w-6 h-6 text-white" />
+          <div className="shadow-lg shadow-indigo-200 rounded-xl overflow-hidden">
+            <img src="/icon.png" alt="Logo" className="w-10 h-10 object-cover" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight leading-none">
