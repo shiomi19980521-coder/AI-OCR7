@@ -501,7 +501,7 @@ export const Home: React.FC = () => {
         {/* Hero Section */}
         <div className="text-center mb-10">
           <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-3">
-            タイムカードを<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Googleスプレッドシート</span>へ瞬時に転記
+            スマホで完結！紙のタイムカードを<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Googleスプレッドシート</span>へ瞬時に転記
           </h1>
           <p className="text-base text-slate-600 max-w-2xl mx-auto">
             写真をアップロードするだけで、AIが名前・日付・開始・終了時間を自動で読み取ります。<br />
