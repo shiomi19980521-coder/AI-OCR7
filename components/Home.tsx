@@ -526,7 +526,7 @@ export const Home: React.FC = () => {
 
               <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center">
                 <div className="bg-slate-900 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-2 shadow-md shadow-slate-900/20">1</div>
-                連携と設定
+                GoogleスプレッドシートのURLを貼り付け（任意）
               </h2>
 
               <div className="mb-8">

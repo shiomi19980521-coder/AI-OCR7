@@ -67,7 +67,7 @@ export const SpreadsheetPanel: React.FC<SpreadsheetPanelProps> = ({ savedId, onS
               if (isSaved) setIsSaved(false);
               if (error) setError(null);
             }}
-            placeholder={isSaved ? "連携済み（変更するにはURLを貼り付け）" : "GoogleスプレッドシートのURLを貼り付け"}
+            placeholder=""
             className="w-full bg-transparent border-none text-sm text-slate-700 placeholder:text-slate-400 focus:ring-0 p-1"
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSave();
