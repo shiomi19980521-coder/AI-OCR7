@@ -508,11 +508,7 @@ export const Home: React.FC = () => {
             手書きでの文字や日付の抜け漏れ等も自動補完し、スプレッドシートへ即転記します。
           </p>
 
-          {/* Integrated Spreadsheet Config Panel */}
-          <SpreadsheetPanel
-            savedId={sheetSettings.id}
-            onSave={saveSettings}
-          />
+
         </div>
 
         {/* Main Interface Grid */}
@@ -530,6 +526,19 @@ export const Home: React.FC = () => {
 
               <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center">
                 <div className="bg-slate-900 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-2 shadow-md shadow-slate-900/20">1</div>
+                連携と設定
+              </h2>
+
+              <div className="mb-8">
+                <SpreadsheetPanel
+                  savedId={sheetSettings.id}
+                  onSave={saveSettings}
+                  className="w-full"
+                />
+              </div>
+
+              <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center">
+                <div className="bg-slate-900 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-2 shadow-md shadow-slate-900/20">2</div>
                 画像をアップロード
               </h2>
               <DropZone
