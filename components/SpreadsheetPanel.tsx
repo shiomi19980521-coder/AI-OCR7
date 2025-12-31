@@ -14,8 +14,7 @@ export const SpreadsheetPanel: React.FC<SpreadsheetPanelProps> = ({ savedId, onS
 
   useEffect(() => {
     if (savedId) {
-      // Do NOT populate URL to keep it blank as requested
-      // setUrl(`https://docs.google.com/spreadsheets/d/${savedId}/edit`);
+      setUrl(`https://docs.google.com/spreadsheets/d/${savedId}/edit`);
       setIsSaved(true);
     }
   }, [savedId]);
@@ -33,8 +32,8 @@ export const SpreadsheetPanel: React.FC<SpreadsheetPanelProps> = ({ savedId, onS
       onSave(match[1]);
       setError(null);
       setIsSaved(true);
-      // Clear URL after save to keep it clean (optional, keeping user request "blank")
-      setUrl('');
+      setIsSaved(true);
+      // setUrl(''); // Keep URL displayed as per user request
     } else {
       setError('有効なスプレッドシートURLを入力してください');
       setIsSaved(false);
