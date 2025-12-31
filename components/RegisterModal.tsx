@@ -202,7 +202,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, toggle, on
                                         // Redirect to Stripe payment page
                                         // After successful payment, user will be redirected to /payment-success
                                         // where the actual Supabase registration will happen
-                                        window.location.href = 'https://buy.stripe.com/test_3cI3cvaOBeZW6Fr3pg3AY00';
+                                        window.location.href = 'https://buy.stripe.com/14A7sL6yl0525Bn1h83AY01';
                                     } catch (err: any) {
                                         console.error('RegisterModal: Error:', err);
                                         setErrorMsg('エラーが発生しました。もう一度お試しください。');
