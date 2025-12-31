@@ -76,8 +76,8 @@ export const Home: React.FC = () => {
   useEffect(() => {
     // Helper to update user state from session
     const updateUserFromSession = async (sessionUser: any) => {
-      // Any logged in user is considered Premium
-      const isPremium = true;
+      // Check metadata for premium status (set by PaymentSuccess after Stripe payment)
+      const isPremium = sessionUser.user_metadata?.is_premium === true;
       const newUser: User = {
         name: sessionUser.email?.split('@')[0] || 'User',
         email: sessionUser.email || '',

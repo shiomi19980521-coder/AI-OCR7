@@ -151,43 +151,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, toggle, on
                                     setIsSubmitting(true);
 
                                     try {
-                                        console.log('RegisterModal: Checking if email already exists...');
-
-                                        // Check if email already exists by attempting to sign up with a temporary password
-                                        // This will return an error if the email is already registered
-                                        const checkEmail = await supabase.auth.signUp({
-                                            email: email,
-                                            password: 'temp_check_' + Math.random().toString(36),
-                                            options: {
-                                                emailRedirectTo: window.location.origin,
-                                                data: {
-                                                    is_temp_check: true
-                                                }
-                                            }
-                                        });
-
-                                        console.log('RegisterModal: Email check result:', checkEmail);
-
-                                        // If user already exists, identities will be empty
-                                        if (checkEmail.data?.user && checkEmail.data.user.identities && checkEmail.data.user.identities.length === 0) {
-                                            console.log('RegisterModal: Email already registered');
-                                            setErrorMsg('このメールアドレスは既に登録されています。ログインしてください。');
-                                            setIsSubmitting(false);
-                                            return;
-                                        }
-
-                                        // If there's an error about existing user
-                                        if (checkEmail.error && (
-                                            checkEmail.error.message.includes('already registered') ||
-                                            checkEmail.error.message.includes('User already registered')
-                                        )) {
-                                            console.log('RegisterModal: Email already registered (error)');
-                                            setErrorMsg('このメールアドレスは既に登録されています。ログインしてください。');
-                                            setIsSubmitting(false);
-                                            return;
-                                        }
-
-                                        console.log('RegisterModal: Email is available, storing credentials in sessionStorage');
+                                        // Skip email check to prevent sending confirmation email before payment
+                                        // Directly proceed to payment
+                                        console.log('RegisterModal: Storing credentials and redirecting to Stripe');
 
                                         // Store email and password in sessionStorage for later use after payment
                                         sessionStorage.setItem('pending_registration_email', email);
